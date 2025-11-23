@@ -2,10 +2,14 @@
   "name": "coderush2",
   "version": "1.0.0",
   "description": "��#\u0000 \u0000C\u0000o\u0000d\u0000e\u0000R\u0000u\u0000s\u0000h\u0000\r\u0000 \u0000",
+  "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon src/index.js"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
 }
