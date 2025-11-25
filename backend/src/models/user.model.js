@@ -14,6 +14,10 @@ const userSchema = new Schema({
         type: String,
         trim: true,
     },
+    elo:{
+        type: Number,
+        default: 0,
+    },
     avatar:{
         type: String,
         default: 'default-avatar.png'
@@ -30,7 +34,15 @@ const userSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User'
     }],
-
+    status:{
+        type: String,
+        enum: ['online', 'offline', 'busy', 'away'],
+        default: 'offline'
+    },
+    problemsSolved:{
+        type: Number,
+        default: 0,
+    },
     refreshToken:{
         type: String,
     }
