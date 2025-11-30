@@ -14,20 +14,25 @@ const gameSchema = new Schema({
             enum: ['connected', 'disconnected', 'left'],
             default: 'connected',
         },
-        submmissions:[{
+        submissions:[{
             questionId:{
                 type: Schema.Types.ObjectId,
                 ref: 'Question',
             }
         }]
     }],
+    status: {
+        type: String,
+        enum: ['waiting', 'active', 'finished'],
+        default: 'waiting'
+    },
     roomId:{
         type: String,
         required: true,
         unique: true,
         index: true
     },
-    qustions:[{
+    questions:[{
         type: Schema.Types.ObjectId,
         ref: 'Question',
         required: true
