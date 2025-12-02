@@ -22,6 +22,10 @@ const userSchema = new Schema({
         type: String,
         default: 'default-avatar.png'
     },
+    stats: {
+        wins: { type: Number, default: 0 },
+        totalGames: { type: Number, default: 0 }
+    },
     password:{
         required: [true, 'Password is required'],
         type: String,
