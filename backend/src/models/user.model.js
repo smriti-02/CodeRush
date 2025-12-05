@@ -1,6 +1,12 @@
 import mongoose, { Schema } from 'mongoose';
 
 const userSchema = new Schema({
+    appwriteId: {
+        type: String,
+        required: true,
+        unique: true,
+        index: true
+    },
     username:{
         unique: true,
         required: true,
