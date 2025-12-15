@@ -4,6 +4,8 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { createSessionClient } from '../utils/appwrite.js';
 
+import jwt from 'jsonwebtoken';
+
 const generateAccessAndRefreshTokens = async(userId) => {
     try {
         const user = await User.findById(userId);
@@ -156,9 +158,79 @@ const socialLoginHandler = asyncHandler(async (req, res) => {
         );
 });
 
+const logoutUser = asyncHandler(async (req, res) => {
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set: {
+                refreshToken: undefined
+            }
+        },
+        {new: true}
+    );
+
+    const options = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+    }
+
+    return res
+        .status(200)
+        .clearCookie("accessToken", options)
+        .clearCookie("refreshToken", options)
+        .json(new ApiResponse(200, {}, "User logged out successfully"));
+
+});
+
+const refreshAccessToken = asyncHandler(async (req, res) => {
+    const incomingRefreshToken = req.cookies.refreshtoken;
+
+    if (!incomingRefreshToken) {
+        throw new ApiError(401, "Refresh token missing. Unauthorized access.");
+    }
+
+    try {
+        const decodedToken = jwt.verify(
+            incomingRefreshToken,
+            process.env.REFRESH_TOKEN_SECRET
+        );;
+
+        const user = await User.findById(decodedToken._id);
+
+        if (!user) {
+            throw new ApiError(404, "User not found. Unauthorized access.");
+        }
+
+        if (incomingRefreshToken !== user.refreshToken) {
+            throw new ApiError(401, "Refresh token was used or revoked. Please log in again.");
+        }
+
+        const { accessToken: newAccessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user._id);
+
+        const options = {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+        }
+        const userData = user.toObject();
+        delete userData.password;
+        delete userData.refreshToken;
+
+        return res
+            .status(200)
+            .cookie("accessToken", newAccessToken, options)
+            .cookie("refreshToken", newRefreshToken, options)
+            .json(new ApiResponse(200, userData, "Access token refreshed successfully."));
+        } catch (error) {
+        throw new ApiError(401, error?.message || "Invalid or expired refresh token. Unauthorized access.");
+    }
+    
+});
+
 export { 
     registerUser, 
     socialLoginHandler,
     loginUser,
-    generateAccessAndRefreshTokens
+    generateAccessAndRefreshTokens,
+    logoutUser,
+    refreshAccessToken
 };
