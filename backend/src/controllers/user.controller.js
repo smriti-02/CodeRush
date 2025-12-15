@@ -5,7 +5,24 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { createSessionClient } from '../utils/appwrite.js';
 
 const generateAccessAndRefreshTokens = async(userId) => {
-    return { accessToken: 'dummyAccessToken', refreshToken: 'dummyRefreshToken' }
+    try {
+        const user = await User.findById(userId);
+        
+        if (!user) {
+            throw new ApiError(404, "User not found for token generation");
+        }
+        const accessToken = user.generateAccessToken();
+        const refreshToken = user.generateRefreshToken();
+
+        user.refreshToken = refreshToken;
+        await user.save({ validateBeforeSave: false });
+
+        return { accessToken, refreshToken };
+
+    } catch (error) {
+        throw new ApiError(500, "Something went wrong while generating refresh and access tokens");
+    }
+
 }
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -45,7 +62,43 @@ const registerUser = asyncHandler(async (req, res) => {
     );
 });
 
-export const socialLoginHandler = asyncHandler(async (req, res) => {
+const loginUser = asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
+
+    if(!email || !password) {
+        throw new ApiError(400, "Email and password are required");
+    }
+
+    const {account} = createSessionClient();
+    let session;
+
+    try{
+        session = await account.createEmailPasswordSession(email, password);
+    }
+    catch(err){
+        throw new ApiError(401, "Invalid email or password");
+    }
+
+    const appwriteUser = await account.get();
+
+    const user  = await User.findOne({ appwriteId: appwriteUser.$id });
+
+    if (!user) {
+        throw new ApiError(404, "User not found in MongoDB");
+    }
+
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+
+    return res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", refreshToken, options)
+        .json(
+            new ApiResponse(200, user, "User logged in successfully")
+        )
+});
+
+const socialLoginHandler = asyncHandler(async (req, res) => {
     const { 
         $id: appwriteId, 
         email, 
@@ -105,5 +158,7 @@ export const socialLoginHandler = asyncHandler(async (req, res) => {
 
 export { 
     registerUser, 
-    socialLoginHandler 
+    socialLoginHandler,
+    loginUser,
+    generateAccessAndRefreshTokens
 };
