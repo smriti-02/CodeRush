@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { 
     registerUser, 
-    loginUser, 
-    logoutUser, 
-    refreshAccessToken  
+    socialLoginHandler,
+    loginUser,
+    generateAccessAndRefreshTokens,
+    logoutUser,
+    refreshAccessToken
 } from '../controllers/user.controller.js';
 import { verifyJWT }  from '../middlewares/auth.middleware.js';
 

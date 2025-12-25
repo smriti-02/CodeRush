@@ -67,37 +67,37 @@ const registerUser = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
-    if(!email || !password) {
-        throw new ApiError(400, "Email and password are required");
+    const { account } = createSessionClient();
+
+    try {
+        // 1. Create session in Appwrite
+        const session = await account.createEmailPasswordSession(email, password);
+        
+        // 2. IMPORTANT: Find user in MongoDB using session.userId (AppwriteId)
+        // Do NOT call account.get() as it often fails with "missing scope (account)" on servers
+        const user = await User.findOne({ appwriteId: session.userId });
+
+        if (!user) {
+            throw new ApiError(404, "User does not exist in MongoDB");
+        }
+
+        // 3. Generate tokens (Ensure .env is configured correctly!)
+        const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+
+        const options = {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production"
+        };
+
+        return res
+            .status(200)
+            .cookie("accessToken", accessToken, options)
+            .cookie("refreshToken", refreshToken, options)
+            .json(new ApiResponse(200, user, "User logged in successfully"));
+            
+    } catch (err) {
+        throw new ApiError(500, err.message || "Login failed at server");
     }
-
-    const {account} = createSessionClient();
-    let session;
-
-    try{
-        session = await account.createEmailPasswordSession(email, password);
-    }
-    catch(err){
-        throw new ApiError(401, "Invalid email or password");
-    }
-
-    const appwriteUser = await account.get();
-
-    const user  = await User.findOne({ appwriteId: appwriteUser.$id });
-
-    if (!user) {
-        throw new ApiError(404, "User not found in MongoDB");
-    }
-
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
-
-    return res
-        .status(200)
-        .cookie("accessToken", accessToken, options)
-        .cookie("refreshToken", refreshToken, options)
-        .json(
-            new ApiResponse(200, user, "User logged in successfully")
-        )
 });
 
 const socialLoginHandler = asyncHandler(async (req, res) => {
