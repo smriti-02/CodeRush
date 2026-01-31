@@ -18,23 +18,6 @@ router.route("/refresh-token").post(refreshAccessToken);
 router.route("/logout").post(verifyJWT, logoutUser);
 
 //Google OAuth
-router.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-router.get("/auth/google/callback", 
-    passport.authenticate("google", { session: false }), 
-    (req, res) => {
-        // Successful authentication, redirect or respond as needed.
-    }
-);
-
-//GitHub OAuth
-router.get("/auth/github", passport.authenticate("github", { scope: ["user:email"] }));
-router.get("/auth/github/callback", 
-    passport.authenticate("github", { session: false }), 
-    (req, res) => {
-        // Successful authentication, redirect or respond as needed.
-    }
-);
-
 router.get("/auth/google/callback", 
     passport.authenticate("google", { session: false }), 
     async (req, res) => {
@@ -48,6 +31,7 @@ router.get("/auth/google/callback",
     }
 );
 
+//GitHub OAuth
 router.get("/auth/github/callback", 
     passport.authenticate("github", { session: false }), 
     async (req, res) => {

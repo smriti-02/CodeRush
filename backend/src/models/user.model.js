@@ -34,10 +34,6 @@ const userSchema = new Schema({
         wins: { type: Number, default: 0 },
         totalGames: { type: Number, default: 0 }
     },
-    password:{
-        
-        type: String,
-    },
     gameHistory: [{
         type: Schema.Types.ObjectId,
         ref: 'Game'
