@@ -1,12 +1,10 @@
 import mongoose, { Schema } from 'mongoose';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
 const userSchema = new Schema({
-    appwriteId: {
-        type: String,
-        required: true,
-        unique: true,
-        index: true
-    },
+    googleId: { type: String, unique: true, sparse: true },
+    githubId: { type: String, unique: true, sparse: true },
     username:{
         unique: true,
         required: true,
@@ -19,6 +17,10 @@ const userSchema = new Schema({
         required: true,
         type: String,
         trim: true,
+    },
+    password: {
+        type: String,
+        required: function() { return !this.googleId && !this.githubId; } // This means password is required if neither googleId nor githubId is provided
     },
     elo:{
         type: Number,
@@ -63,13 +65,24 @@ const userSchema = new Schema({
     timestamps: true,
 });
 
+userSchema.pre("save", async function (next) {
+    if(!this.isModified("password")) return next();
+    this.password = await bcrypt.hash(this.password, 10);
+    next();
+});
+
+userSchema.methods.isPasswordCorrect = async function(password){
+    return await bcrypt.compare(password, this.password);
+};
+
 userSchema.methods.generateAccessToken = function() {
     return jwt.sign(
         {
             _id: this._id,
             email: this.email,
             username: this.username,
-            appwriteId: this.appwriteId // Or any other relevant info
+            googleId: this.googleId || null,
+            githubId: this.githubId || null,
         },
         process.env.ACCESS_TOKEN_SECRET,
         {
