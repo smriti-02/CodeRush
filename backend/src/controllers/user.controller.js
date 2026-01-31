@@ -5,7 +5,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 
 import jwt from 'jsonwebtoken';
 
-const generateAccessAndRefreshTokens = async(userId) => {
+export const generateAccessAndRefreshTokens = async(userId) => {
     try {
         const user = await User.findById(userId);
         const accessToken = user.generateAccessToken();
@@ -20,7 +20,7 @@ const generateAccessAndRefreshTokens = async(userId) => {
     }
 };
 
-const registerUser = asyncHandler(async (req, res) => {
+export const registerUser = asyncHandler(async (req, res) => {
     const { email, username, password } = req.body;
 
     if ([email, username, password].some((field) => field?.trim() === "")) {
@@ -42,7 +42,7 @@ const registerUser = asyncHandler(async (req, res) => {
     return res.status(201).json(new ApiResponse(201, createdUser, "User registered successfully"));
 });
 
-const loginUser = asyncHandler(async (req, res) => {
+export const loginUser = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -75,7 +75,7 @@ const loginUser = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, { user: loggedInUser, accessToken, refreshToken }, "User logged in successfully"));
 });
 
-const logoutUser = asyncHandler(async (req, res) => {
+export const logoutUser = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(
         req.user._id,
         {
@@ -99,7 +99,7 @@ const logoutUser = asyncHandler(async (req, res) => {
 
 });
 
-const refreshAccessToken = asyncHandler(async (req, res) => {
+export const refreshAccessToken = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies.refreshToken;
 
     if (!incomingRefreshToken) {
@@ -142,11 +142,3 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
     
 });
-
-export { 
-    registerUser, 
-    loginUser,
-    generateAccessAndRefreshTokens,
-    logoutUser,
-    refreshAccessToken
-};
