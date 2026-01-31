@@ -20,7 +20,7 @@ const generateAccessAndRefreshTokens = async(userId) => {
     }
 };
 
-export const registerUser = asyncHandler(async (req, res) => {
+const registerUser = asyncHandler(async (req, res) => {
     const { email, username, password } = req.body;
 
     if ([email, username, password].some((field) => field?.trim() === "")) {
@@ -42,7 +42,7 @@ export const registerUser = asyncHandler(async (req, res) => {
     return res.status(201).json(new ApiResponse(201, createdUser, "User registered successfully"));
 });
 
-export const loginUser = asyncHandler(async (req, res) => {
+const loginUser = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
