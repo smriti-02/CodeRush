@@ -35,7 +35,31 @@ router.get("/auth/github/callback",
     }
 );
 
+router.get("/auth/google/callback", 
+    passport.authenticate("google", { session: false }), 
+    async (req, res) => {
+        const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(req.user._id);
+        
+        const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production' };
 
+        res.cookie("accessToken", accessToken, options)
+           .cookie("refreshToken", refreshToken, options)
+           .redirect(`${process.env.FRONTEND_URL}/dashboard`); // Redirect to your frontend
+    }
+);
+
+router.get("/auth/github/callback", 
+    passport.authenticate("github", { session: false }), 
+    async (req, res) => {
+        const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(req.user._id);
+        
+        const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production' };
+
+        res.cookie("accessToken", accessToken, options)
+           .cookie("refreshToken", refreshToken, options)
+           .redirect(`${process.env.FRONTEND_URL}/dashboard`); // Redirect to your frontend
+    }
+);
 router.route("/profile").get(verifyJWT, async (req, res) => {
     return res.status(200).json({
         status: 200,
