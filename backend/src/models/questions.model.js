@@ -74,7 +74,24 @@ const questionSchema = new Schema({
     }],
 
     enableRunCode: { type: Boolean, default: true },
-    enableSubmit: { type: Boolean, default: true }
+    enableSubmit: { type: Boolean, default: true },
+
+    allTestCases: [{
+        input: { type: String, required: true },
+        output: { type: String, required: true },
+        isHidden: { type: Boolean, default: true }
+    }],
+
+    performanceTargets: {
+        optimalTimeComplexity: { type: String, default: "O(n)" },
+        optimalSpaceComplexity: { type: String, default: "O(n)" },
+        basePoints: { type: Number, default: 100 } 
+    },
+
+    executionLimits: {
+        timeout: { type: Number, default: 2000 }, // in milliseconds
+        memory: { type: Number, default: 128 }    // in MB
+    },
     
 },{ timestamps: true });
 
