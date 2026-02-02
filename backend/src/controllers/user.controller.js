@@ -65,7 +65,7 @@ export const loginUser = asyncHandler(async (req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: process.env.NODE_ENV === 'production'
     };
 
     return res
@@ -110,7 +110,7 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
         const decodedToken = jwt.verify(
             incomingRefreshToken,
             process.env.REFRESH_TOKEN_SECRET
-        );;
+        );
 
         const user = await User.findById(decodedToken._id);
 

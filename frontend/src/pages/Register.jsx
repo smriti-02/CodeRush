@@ -31,11 +31,11 @@ const Register = () => {
 
     // Helper functions to trigger the same Passport.js flows used in login
     const continueWithGoogle = () => {
-        window.open("http://localhost:8000/api/v1/users/auth/google", "_self");
+        window.location.href = "http://localhost:8000/api/v1/users/auth/google";
     };
 
     const continueWithGithub = () => {
-        window.open("http://localhost:8000/api/v1/users/auth/github", "_self");
+        window.location.href = "http://localhost:8000/api/v1/users/auth/github";
     };
 
     return (

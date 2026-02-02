@@ -40,3 +40,20 @@
 .read-the-docs {
   color: #888;
 }
+.auth-container {
+  max-width: 400px;
+  margin: 2rem auto;
+  padding: 2rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.auth-container input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}

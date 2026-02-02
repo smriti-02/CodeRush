@@ -7,7 +7,7 @@ import { User } from '../models/user.model.js';
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "/api/v1/users/auth/google/callback"
+    callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/v1/users/auth/google/callback`
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ googleId: profile.id });
@@ -16,7 +16,7 @@ passport.use(new GoogleStrategy({
                 googleId: profile.id,
                 username: profile.displayName.replace(/\s+/g, '').toLowerCase(),
                 email: profile.emails[0].value,
-                avatar: profile.photos[0].value
+                avatar: profile.photos?.[0]?.value || 'default-avatar.png'
             });
         }
         return done(null, user);
@@ -29,7 +29,7 @@ passport.use(new GoogleStrategy({
 passport.use(new GitHubStrategy({
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: "/api/v1/users/auth/github/callback"
+    callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/v1/users/auth/github/callback`
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ githubId: profile.id });
@@ -38,7 +38,7 @@ passport.use(new GitHubStrategy({
                 githubId: profile.id,
                 username: profile.username,
                 email: profile.emails?.[0].value || `${profile.username}@github.com`,
-                avatar: profile.photos[0].value
+                avatar: profile.photos?.[0]?.value || 'default-avatar.png'
             });
         }
         return done(null, user);

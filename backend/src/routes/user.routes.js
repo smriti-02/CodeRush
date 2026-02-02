@@ -18,6 +18,8 @@ router.route("/refresh-token").post(refreshAccessToken);
 router.route("/logout").post(verifyJWT, logoutUser);
 
 //Google OAuth
+// Trigger for Google Auth
+router.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 router.get("/auth/google/callback", 
     passport.authenticate("google", { session: false }), 
     async (req, res) => {
@@ -32,6 +34,8 @@ router.get("/auth/google/callback",
 );
 
 //GitHub OAuth
+// Trigger for GitHub Auth
+router.get("/auth/github", passport.authenticate("github", { scope: ["user:email"] }));
 router.get("/auth/github/callback", 
     passport.authenticate("github", { session: false }), 
     async (req, res) => {
