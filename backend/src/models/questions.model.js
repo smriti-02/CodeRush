@@ -92,7 +92,6 @@ const questionSchema = new Schema({
         timeout: { type: Number, default: 2000 }, // in milliseconds
         memory: { type: Number, default: 128 }    // in MB
     },
-    
 },{ timestamps: true });
 
 export const Question = mongoose.model('Question', questionSchema);
