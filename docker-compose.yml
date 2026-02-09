@@ -1,0 +1,26 @@
+version: '2.4'
+
+services:
+  # This handles the code execution
+  judge0:
+    image: judge0/judge0:latest
+    volumes:
+      - ./judge0.conf:/etc/judge0.conf:ro
+    ports:
+      - "2358:2358"
+    depends_on:
+      - db
+      - redis
+
+  # Stores the code while it's being graded
+  redis:
+    image: redis:6.0
+    command: [ "redis-server", "--save", "60", "1" ]
+
+  # Judge0 needs this for internal logs
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0
+      - POSTGRES_DB=judge0
