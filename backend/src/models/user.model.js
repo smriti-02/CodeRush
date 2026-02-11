@@ -3,7 +3,6 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
 const userSchema = new Schema({
-    appwriteId: { type: String, unique: true, sparse: true },
     googleId: { type: String, unique: true, sparse: true },
     githubId: { type: String, unique: true, sparse: true },
     username:{
@@ -62,9 +61,10 @@ const userSchema = new Schema({
     timestamps: true,
 });
 
-userSchema.pre("save", async function () {
-    if (!this.isModified("password")) return;
+userSchema.pre("save", async function (next) {
+    if(!this.isModified("password")) return next();
     this.password = await bcrypt.hash(this.password, 10);
+    next();
 });
 
 userSchema.methods.isPasswordCorrect = async function(password){
