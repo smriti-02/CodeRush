@@ -1,7 +1,24 @@
-version: '2.4'
-
 services:
-  # This handles the code execution
+  # 1.Backend
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - mongo
+      - judge0
+
+  # 2.Database
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  # 3.The Execution Engine
   judge0:
     image: judge0/judge0:latest
     volumes:
@@ -12,15 +29,18 @@ services:
       - db
       - redis
 
-  # Stores the code while it's being graded
+  # 4. Judge0's Memory
   redis:
     image: redis:6.0
     command: [ "redis-server", "--save", "60", "1" ]
 
-  # Judge0 needs this for internal logs
+  # 5. Judge0's Logbook (Postgres)
   db:
     image: postgres:13
     environment:
       - POSTGRES_USER=judge0
       - POSTGRES_PASSWORD=judge0
       - POSTGRES_DB=judge0
+
+volumes:
+  mongo-data:
