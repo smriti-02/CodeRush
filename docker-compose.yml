@@ -1,7 +1,12 @@
+version: '3'
+
 services:
   # 1.Backend
   api:
     build: ./backend
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
     ports:
       - "8000:8000"
     env_file:
@@ -18,29 +23,39 @@ services:
     volumes:
       - mongo-data:/data/db
 
-  # 3.The Execution Engine
+  # 3.(Judge0)
   judge0:
-    image: judge0/judge0:latest
+    image: judge0/judge0:1.13.0
+    privileged: true
     volumes:
-      - ./judge0.conf:/etc/judge0.conf:ro
+      - ./judge0.conf:/judge0.conf:ro
     ports:
       - "2358:2358"
     depends_on:
       - db
       - redis
+    environment:
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=db
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0
+      - POSTGRES_DB=judge0
 
-  # 4. Judge0's Memory
+  # 4. Judge0's Memory 
   redis:
     image: redis:6.0
     command: [ "redis-server", "--save", "60", "1" ]
 
-  # 5. Judge0's Logbook (Postgres)
+  # 5. Judge0's Logbook
   db:
     image: postgres:13
     environment:
       - POSTGRES_USER=judge0
       - POSTGRES_PASSWORD=judge0
       - POSTGRES_DB=judge0
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
 
 volumes:
   mongo-data:
+  postgres-data:

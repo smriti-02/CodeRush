@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import userRouter from './routes/user.routes.js';
-import "./config/Passport.js";
+import "./config/passport.js";
 import helmet from 'helmet';
 
 const app = express();

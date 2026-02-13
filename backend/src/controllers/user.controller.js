@@ -3,7 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';     
 import { ApiResponse } from '../utils/ApiResponse.js';
 import jwt from 'jsonwebtoken';
-import { submitCodeToJudge } from "../services/judge.services.js";
+import { sendToJudge } from "../services/judge.services.js";
 
 export const generateAccessAndRefreshTokens = async(userId) => {
     try {
@@ -145,11 +145,7 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
 
 export const runCode = asyncHandler(async (req, res) => {
     const { code, languageId } = req.body;
-
-    // Call our new service
-    const result = await submitCodeToJudge(code, languageId);
-
-    // Send back the output from the judge
+    const result = await sendToJudge(code, languageId);
     return res.status(200).json(
         new ApiResponse(200, result, "Code executed successfully")
     );
