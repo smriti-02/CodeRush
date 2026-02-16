@@ -51,7 +51,19 @@ const gameSchema = new Schema({
             enum: ['classic', 'Ranked', 'Marathon'],
             default: 'classic',
         }
-    }
+    },
+    eloChange: {
+        type: Number,
+        default: 0
+    },
+    finalComplexity: {
+        type: String,
+        enum: ['O(1)', 'O(log n)', 'O(n)', 'O(n log n)', 'O(n^2)','O(n^3)', 'O(2^n)', 'O(n!)'],
+    },
+    attempts: {
+        type: Number,
+        default: 0
+    },
     
 },
 {timestamps: true});

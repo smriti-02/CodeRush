@@ -143,10 +143,4 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
     
 });
 
-export const runCode = asyncHandler(async (req, res) => {
-    const { code, languageId } = req.body;
-    const result = await sendToJudge(code, languageId);
-    return res.status(200).json(
-        new ApiResponse(200, result, "Code executed successfully")
-    );
-});
+

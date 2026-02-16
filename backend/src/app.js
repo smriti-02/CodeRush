@@ -4,6 +4,8 @@ import cookieParser from "cookie-parser";
 import userRouter from './routes/user.routes.js';
 import "./config/passport.js";
 import helmet from 'helmet';
+import gameRouter from "./routes/game.routes.js";
+
 
 const app = express();
 
@@ -51,6 +53,7 @@ app.use(express.static("public"));
 app.use(cookieParser());
 
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/games", gameRouter);
 
 
 
