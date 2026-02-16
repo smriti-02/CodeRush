@@ -23,8 +23,8 @@ const gameSchema = new Schema({
     }],
     status: {
         type: String,
-        enum: ['waiting', 'active', 'finished'],
-        default: 'waiting'
+        enum: ['Pending', 'Completed', 'Abandoned'],
+        default: 'Pending'
     },
     roomId:{
         type: String,
