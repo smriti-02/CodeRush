@@ -1,21 +1,23 @@
 import mongoose, {Schema} from 'mongoose';
 
 const gameSchema = new Schema({
-    players:[{
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-        socketId:{
+    players: [{
+        user: { 
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            required: true
+        },
+        socketId: {
             type: String,
             required: true,
         },
-        status:{
+        status: {
             type: String,
             enum: ['connected', 'disconnected', 'left'],
             default: 'connected',
         },
-        submissions:[{
-            questionId:{
+        submissions: [{
+            questionId: {
                 type: Schema.Types.ObjectId,
                 ref: 'Question',
             }

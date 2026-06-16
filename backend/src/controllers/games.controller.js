@@ -1,13 +1,15 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Game } from "../models/game.model.js";
 import { User } from "../models/user.model.js";
+import { Question } from "../models/questions.model.js"; // Step 1: Imported Question model
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { sendToJudge } from "../services/judge.services.js";
 import { calculateMatchResults } from "../utils/scoring.utils.js";
 import { io } from "../index.js";
+import crypto from "crypto"; // Used to generate unique roomId
 
-//runCode and GameResults
+// runCode and GameResults
 export const runCode = asyncHandler(async (req, res) => {
     const { code, languageId, gameId, complexity } = req.body;
 
@@ -17,27 +19,32 @@ export const runCode = asyncHandler(async (req, res) => {
     const result = await sendToJudge(code, languageId);
 
     if (gameId && result.status?.id === 3) {
-        const game = await Game.findById(gameId).populate("question");
+        // Updated population to match plural 'questions' field
+        const game = await Game.findById(gameId).populate("questions");
         
-        if (!game) throw new ApiError(404, "Game record not found");
+        if (!game || !game.questions || game.questions.length === 0) {
+            throw new ApiError(404, "Game or associated question record not found");
+        }
+
+        const activeQuestion = game.questions[0];
 
         const matchData = {
-            isWinner: true, //will be used for future multiplayer mode
-            difficulty: game.question.difficulty,
+            isWinner: true, 
+            difficulty: activeQuestion.difficulty,
             userComplexity: complexity,
-            targetComplexity: game.question.targetComplexity,
+            targetComplexity: activeQuestion.performanceTargets?.optimalTimeComplexity || "O(n)",
             wrongSubmissions: req.body.wrongSubmissions || 0
         };
 
-        // 3. Calculate ELO change based on match results
+        // Calculate ELO change based on match results
         const { netEloChange } = calculateMatchResults(matchData);
 
-        // 4. Update Database
+        // Update Database
         await User.findByIdAndUpdate(req.user._id, { $inc: { elo: netEloChange } });
         
         game.eloChange = netEloChange;
         game.finalComplexity = complexity;
-        game.status = 'COMPLETED';
+        game.status = 'Completed'; // Step 3: Capitalized to match schema string validation enum ['Pending', 'Completed', 'Abandoned']
         await game.save();
 
         return res.status(200).json(
@@ -66,15 +73,59 @@ let matchQueue = []; // Simple in-memory queue for matchmaking
 
 export const findMatch = asyncHandler(async (req, res) => {
     const userId = req.user._id;
+    // Expecting optional tags (array of strings/slugs) and difficulty from the request body or query params
+    // Example payload: { tags: ["array", "dynamic-programming"], difficulty: "Medium" }
+    const { tags, difficulty } = req.body;
 
     if (matchQueue.length > 0) {
         const opponentId = matchQueue.shift();
-        const randomQuestion = await Question.aggregate([{ $sample: { size: 1 } }]);
+
+        // Build the dynamic match filter criteria
+        const matchCriteria = {};
+
+        if (difficulty) {
+            matchCriteria.difficulty = difficulty;
+        }
+
+        if (tags && Array.isArray(tags) && tags.length > 0) {
+            // Matches questions that have AT LEAST ONE of the selected tags matching the slug
+            matchCriteria["topicTags.slug"] = { $in: tags };
+        }
+
+        // Aggregate with filtering before sampling
+        let randomQuestion = await Question.aggregate([
+            { $match: matchCriteria },
+            { $sample: { size: 1 } }
+        ]);
+
+        // Fallback: If no question matches the specific tags/difficulty filter, 
+        // pull any random question so the game doesn't crash.
+        if (!randomQuestion || randomQuestion.length === 0) {
+            randomQuestion = await Question.aggregate([{ $sample: { size: 1 } }]);
+        }
         
+        if (!randomQuestion || randomQuestion.length === 0) {
+            throw new ApiError(500, "No questions found in database to start a match");
+        }
+
+        const generatedRoomId = crypto.randomBytes(8).toString("hex");
+
         const newGame = await Game.create({
-            players: [userId, opponentId],
-            question: randomQuestion[0]._id,
-            status: 'PENDING'
+            players: [
+                {
+                    user: userId, // Maps to the fixed schema field
+                    socketId: `socket_${userId}`, 
+                    status: 'connected'
+                },
+                {
+                    user: opponentId, // Maps to the fixed schema field
+                    socketId: `socket_${opponentId}`, 
+                    status: 'connected'
+                }
+            ],
+            questions: [randomQuestion[0]._id],
+            roomId: generatedRoomId,
+            status: 'Pending'
         });
 
         // Emit real-time event to players
@@ -91,8 +142,8 @@ export const findMatch = asyncHandler(async (req, res) => {
 export const getGameDetails = asyncHandler(async (req, res) => {
     const { gameId } = req.params;
     
-    // Populate the question to get the targetComplexity
-    const game = await Game.findById(gameId).populate("question");
+    // Populate the plural questions field
+    const game = await Game.findById(gameId).populate("questions");
 
     if (!game) {
         throw new ApiError(404, "Game not found");

@@ -21,7 +21,13 @@ app.use(
       directives: {
         "default-src": ["'self'"],
         
-        "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "http://localhost:5173"],
+        "script-src": [
+          "'self'", 
+          "'unsafe-inline'", 
+          "'unsafe-eval'", 
+          "http://localhost:5173",
+          "https://cdn.jsdelivr.net" // REQUIRED FOR MONACO
+        ],
         
         "connect-src": [
           "'self'", 
@@ -40,7 +46,25 @@ app.use(
           "https://avatars.githubusercontent.com"
         ],
         
-        "style-src": ["'self'", "'unsafe-inline'", "http://localhost:5173"],
+        "style-src": [
+          "'self'", 
+          "'unsafe-inline'", 
+          "http://localhost:5173"
+        ],
+
+        // REQUIRED FOR MONACO SYNTAX HIGHLIGHTING
+        "worker-src": [
+          "'self'", 
+          "blob:", 
+          "https://cdn.jsdelivr.net"
+        ],
+
+        // REQUIRED FOR MONACO ICONS
+        "font-src": [
+          "'self'", 
+          "data:", 
+          "https://cdn.jsdelivr.net"
+        ],
         
         "upgrade-insecure-requests": null,
       },
