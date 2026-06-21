@@ -1,56 +1,57 @@
-import React, { useEffect, useState } from 'react';
-import axios from '../api/axios';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
+import { useEffect, useState } from 'react';
+import { io } from 'socket.io-client';
+import { useNavigate } from 'react-router-dom'; // 1. Import useNavigate
 
-const Dashboard = () => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const navigate = useNavigate();
+export default function Dashboard() {
+  const [socket, setSocket] = useState(null);
+  const [playerStats, setPlayerStats] = useState({ online: 0, playing: 0 });
+  
+  const navigate = useNavigate(); // 2. Initialize the hook
 
-    useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                // Calls the profile route defined in your user.routes.js
-                const response = await axios.get('/users/profile');
-                setUser(response.data.data);
-            } catch (error) {
-                console.error("Failed to fetch profile", error);
-                navigate('/login');
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchProfile();
-    }, [navigate]);
+  useEffect(() => {
+    const newSocket = io("http://localhost:8000", {
+      withCredentials: true, 
+    });
 
-    const handleLogout = async () => {
-        try {
-            await axios.post('/users/logout');
-            toast.success("Logged out successfully");
-            navigate('/login');
-        } catch (error) {
-            toast.error("Logout failed");
-        }
+    newSocket.on("connect", () => {
+      console.log("Connected securely with ID:", newSocket.id);
+    });
+
+    newSocket.on("connect_error", (err) => {
+      console.error("Socket connection failed:", err.message);
+      
+      // 3. Trigger the redirect if the backend throws an unauthorized error
+      if (err.message.includes("Unauthorized") || err.message.includes("Invalid")) {
+        navigate('/login');
+      }
+    });
+
+    newSocket.on("playerCountUpdate", (data) => {
+      setPlayerStats(data);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect();
     };
+  }, [navigate]); // Add navigate to the dependency array
 
-    if (loading) return <div className="dashboard-container">Loading...</div>;
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <h1 className="text-3xl font-bold mb-4">CodeRush Dashboard</h1>
+      
+      <div className="mb-8 p-4 bg-gray-800 rounded">
+        <p>Players Online: {playerStats.online}</p>
+        <p>Players in Match: {playerStats.playing}</p>
+      </div>
 
-    return (
-        <div className="dashboard-wrapper">
-            <div className="dashboard-card">
-                <h1>Welcome, {user?.username}!</h1>
-                <div className="user-info">
-                    <p><strong>Email:</strong> {user?.email}</p>
-                    <p><strong>ELO Rating:</strong> {user?.elo || 0}</p>
-                    <p><strong>Problems Solved:</strong> {user?.problemsSolved || 0}</p>
-                </div>
-                <button onClick={handleLogout} className="logout-btn">
-                    Logout
-                </button>
-            </div>
-        </div>
-    );
-};
-
-export default Dashboard;
+      <button 
+        onClick={() => socket?.emit("joinGame", "test-room")}
+        className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+      >
+        Find Match
+      </button>
+    </div>
+  );
+}
