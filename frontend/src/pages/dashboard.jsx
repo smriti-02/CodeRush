@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom'; // 1. Import useNavigate
+import toast from 'react-hot-toast';
 
 export default function Dashboard() {
   const [socket, setSocket] = useState(null);
@@ -14,7 +15,7 @@ export default function Dashboard() {
     });
 
     newSocket.on("connect", () => {
-      console.log("Connected securely with ID:", newSocket.id);
+      // console.log("Connected securely with ID:", newSocket.id);
     });
 
     newSocket.on("connect_error", (err) => {
@@ -24,6 +25,15 @@ export default function Dashboard() {
       if (err.message.includes("Unauthorized") || err.message.includes("Invalid")) {
         navigate('/login');
       }
+    });
+
+    newSocket.on("matchFound", (data) => {
+      console.log("Match found!", data);
+      
+      toast.success("Opponent Found! Entering Arena...");
+      
+      // Redirect to the dynamic Arena route
+      navigate(`/arena/${data.gameId}`);
     });
 
     newSocket.on("playerCountUpdate", (data) => {
@@ -47,7 +57,7 @@ export default function Dashboard() {
       </div>
 
       <button 
-        onClick={() => socket?.emit("joinGame", "test-room")}
+        onClick={() => socket?.emit("findMatch")}
         className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
       >
         Find Match

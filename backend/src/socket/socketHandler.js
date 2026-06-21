@@ -19,6 +19,8 @@ export const initializeSocketHandlers = (io) => {
         broadcastStats(io);
 
         socket.on("findMatch", () => {
+            console.log(`User ${userId} clicked Find Match!`); // <--- ADD THIS LINE
+
             const alreadyInQueue = waitingQueue.find(p => p.userId === userId);
             if (alreadyInQueue) return;
 
