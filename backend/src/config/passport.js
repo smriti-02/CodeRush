@@ -20,7 +20,7 @@ const generateUniqueUsername = async (baseName) => {
     return username;
 };
 
-// Google 
+// Google
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -55,7 +55,7 @@ passport.use(new GoogleStrategy({
     }
 }));
 
-// GitHub 
+// GitHub
 passport.use(new GitHubStrategy({
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
