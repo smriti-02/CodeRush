@@ -9,6 +9,40 @@ import { calculateMatchResults } from "../utils/scoring.utils.js";
 import { io } from "../index.js";
 import crypto from "crypto"; // Used to generate unique roomId
 
+
+export const getArenaData = asyncHandler(async (req, res) => {
+    const { roomId } = req.params;
+
+    // Fetch the game and populate the questions array
+    const game = await Game.findOne({ roomId }).populate('questions');
+
+    if (!game) {
+        throw new ApiError(404, "Match not found");
+    }
+
+    const question = game.questions[0]; // Active question
+
+    return res.status(200).json(
+        new ApiResponse(200, {
+            gameStatus: game.status,
+            settings: game.settings,
+            question: {
+                title: question.title,
+                difficulty: question.difficulty,
+                content: question.content,
+                // Only send the starter code to the frontend! Do not send the driverCode.
+                codeSnippets: question.codeSnippets.map(s => ({
+                    lang: s.lang,
+                    langSlug: s.langSlug,
+                    code: s.code
+                })),
+                sampleTestCase: question.sampleTestCase,
+                topicTags: question.topicTags
+            }
+        }, "Arena data fetched successfully")
+    );
+});
+
 // runCode and GameResults
 export const runCode = asyncHandler(async (req, res) => {
     const { code, languageId, gameId, complexity } = req.body;
@@ -20,7 +54,7 @@ export const runCode = asyncHandler(async (req, res) => {
 
     if (gameId && result.status?.id === 3) {
         // Updated population to match plural 'questions' field
-        const game = await Game.findById(gameId).populate("questions");
+        const game = await Game.findOne({ roomId: gameId }).populate("questions");
         
         if (!game || !game.questions || game.questions.length === 0) {
             throw new ApiError(404, "Game or associated question record not found");
@@ -143,7 +177,7 @@ export const getGameDetails = asyncHandler(async (req, res) => {
     const { gameId } = req.params;
     
     // Populate the plural questions field
-    const game = await Game.findById(gameId).populate("questions");
+    const game = await Game.findOne({ roomId: gameId }).populate("questions");
 
     if (!game) {
         throw new ApiError(404, "Game not found");
