@@ -1,6 +1,7 @@
 let onlinePlayers = new Set();
 let playingPlayers = new Set();
 let waitingQueue = []; // Now stores: { userId, socket, topics, timeLimit, difficulty, joinedAt }
+const activeGames = new Map(); // Phase 1: Track active match states
 
 const difficultyRank = { easy: 1, medium: 2, hard: 3 };
 
@@ -22,6 +23,31 @@ const startGame = (io, player1, player2, matchConfig) => {
 
     playingPlayers.add(player1.userId);
     playingPlayers.add(player2.userId);
+
+    // Phase 1: Initialize Global Timer State
+    const durationSeconds = matchConfig.timeLimit * 60;
+    
+    activeGames.set(gameRoomId, {
+        timeLeft: durationSeconds,
+        players: {
+            [player1.userId]: { socketId: player1.socket.id, status: 'connected' },
+            [player2.userId]: { socketId: player2.socket.id, status: 'connected' }
+        },
+        disconnectTimers: {},
+        interval: setInterval(() => {
+            const game = activeGames.get(gameRoomId);
+            if (!game) return;
+            
+            game.timeLeft--;
+            io.to(gameRoomId).emit("timerUpdate", { timeLeft: game.timeLeft });
+            
+            if (game.timeLeft <= 0) {
+                clearInterval(game.interval);
+                io.to(gameRoomId).emit("matchEnded", { reason: 'timeout' });
+                activeGames.delete(gameRoomId);
+            }
+        }, 1000)
+    });
 
     // Send the match config back to the frontend so they know the final rules
     io.to(gameRoomId).emit("matchFound", {
@@ -47,7 +73,6 @@ export const initializeSocketHandlers = (io) => {
                 const player1 = waitingQueue.splice(idlePlayerIdx, 1)[0];
                 const player2 = waitingQueue.shift(); // Grab whoever is next in line
 
-                
                 const combinedTopics = [...new Set([...player1.topics, ...player2.topics])];
                 const selectedTopic = combinedTopics[Math.floor(Math.random() * combinedTopics.length)];
                 
@@ -92,7 +117,6 @@ export const initializeSocketHandlers = (io) => {
                 // Strict match found!
                 const opponent = waitingQueue.splice(matchIdx, 1)[0];
                 
-                
                 const sharedTopics = opponent.topics.filter(t => topics.includes(t));
                 const selectedTopic = sharedTopics[Math.floor(Math.random() * sharedTopics.length)];
 
@@ -103,8 +127,29 @@ export const initializeSocketHandlers = (io) => {
                     isFallback: false
                 });
             } else {
-                
                 waitingQueue.push(newPlayer);
+            }
+        });
+
+        // Phase 1: Live Status Broadcasting
+        socket.on("playerStatusUpdate", ({ gameId, status }) => {
+            socket.to(gameId).emit("opponentStatusUpdate", { status });
+        });
+
+        // Phase 1: Handle Reconnections
+        socket.on("rejoinMatch", ({ gameId }) => {
+            const game = activeGames.get(gameId);
+            if (game && game.players[userId]) {
+                if (game.disconnectTimers[userId]) {
+                    clearTimeout(game.disconnectTimers[userId]);
+                    delete game.disconnectTimers[userId];
+                }
+                game.players[userId].status = 'connected';
+                game.players[userId].socketId = socket.id;
+                socket.join(gameId);
+                
+                socket.to(gameId).emit("opponentStatusUpdate", { status: "Opponent reconnected!" });
+                socket.emit("timerUpdate", { timeLeft: game.timeLeft });
             }
         });
 
@@ -113,8 +158,21 @@ export const initializeSocketHandlers = (io) => {
             onlinePlayers.delete(userId);
             playingPlayers.delete(userId);
             
-          
             waitingQueue = waitingQueue.filter(p => p.userId !== userId);
+            
+            // Phase 1: Reconnect Grace Period (1.5 minutes)
+            for (const [gameId, game] of activeGames.entries()) {
+                if (game.players[userId]) {
+                    game.players[userId].status = 'disconnected';
+                    socket.to(gameId).emit("opponentStatusUpdate", { status: "Disconnected... (90s to forfeit)" });
+
+                    game.disconnectTimers[userId] = setTimeout(() => {
+                        io.to(gameId).emit("matchEnded", { reason: 'forfeit', loser: userId });
+                        clearInterval(game.interval);
+                        activeGames.delete(gameId);
+                    }, 90000); // 1.5 minutes
+                }
+            }
             
             broadcastStats(io);
         });
