@@ -11,6 +11,7 @@ const MatchmakingUI = ({ onJoinQueue }) => {
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [timeLimit, setTimeLimit] = useState(20);
   const [difficulty, setDifficulty] = useState('medium');
+  const [strictMode, setStrictMode] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchTime, setSearchTime] = useState(0);
 
@@ -49,12 +50,13 @@ const MatchmakingUI = ({ onJoinQueue }) => {
     }
     setIsSearching(true);
     
-    // Pass the exact structure your new backend expects
+    // Pass the exact structure including strictMode
     if (onJoinQueue) {
       onJoinQueue({ 
         topics: selectedTopics, 
         timeLimit: timeLimit, 
-        difficulty: difficulty 
+        difficulty: difficulty,
+        strictMode: strictMode
       });
     }
   };
@@ -141,10 +143,24 @@ const MatchmakingUI = ({ onJoinQueue }) => {
             </div>
           </div>
 
+          {/* 4. Strict Mode Toggle */}
+          <div className="flex items-center pt-2">
+            <input
+              type="checkbox"
+              id="strictMode"
+              checked={strictMode}
+              onChange={(e) => setStrictMode(e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-700 rounded focus:ring-blue-500 cursor-pointer"
+            />
+            <label htmlFor="strictMode" className="ml-2 text-sm font-medium text-gray-400 cursor-pointer hover:text-gray-200 transition-colors">
+              Strict Match (Wait for exact preferences)
+            </label>
+          </div>
+
           <button
             onClick={handleFindMatch}
             disabled={selectedTopics.length === 0}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-3 rounded-lg mt-4 transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)]"
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-3 rounded-lg mt-2 transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)]"
           >
             Find Match
           </button>
@@ -171,7 +187,7 @@ const MatchmakingUI = ({ onJoinQueue }) => {
               ))}
             </div>
             <p className="text-gray-400 text-sm mt-2">
-              {timeLimit} MINS • {difficulty.toUpperCase()}
+              {timeLimit} MINS • {difficulty.toUpperCase()} {strictMode && '• STRICT'}
             </p>
             <div className="mt-4 font-mono text-2xl text-blue-400">
               {formatTime(searchTime)}
