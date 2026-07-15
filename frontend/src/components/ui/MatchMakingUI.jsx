@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 const AVAILABLE_TOPICS = [
-  "Arrays", "Strings", "Math", "HashMaps", 
-  "Two Pointers", "Sliding Window", "DP", "Linked List"
+  "Array", "String", "Math", "Hash Table", 
+  "Two Pointers", "Sliding Window", "Dynamic Programming", "Linked List"
 ];
 
 const TIME_LIMITS = [10, 20, 30, 45, 60];
@@ -63,7 +63,7 @@ const MatchmakingUI = ({ onJoinQueue }) => {
 
   const handleCancel = () => {
     setIsSearching(false);
-    // You should also emit a cancel event to the backend here if you add one later
+    socket.emit("leaveQueue"); // Tell backend to remove us!
   };
 
   return (
