@@ -56,6 +56,7 @@ const questionSchema = new Schema({
         likes: { type: Number, default: 0 },
         dislikes: { type: Number, default: 0 }
     },
+    metaData: { type: String },
 
     // UPDATED: Added driverCode to handle hidden I/O execution
     codeSnippets: [{
