@@ -83,4 +83,4 @@ app.use("/api/v1/judge", judgeRouter);
 
 
 
-export {app}
+export default app;
