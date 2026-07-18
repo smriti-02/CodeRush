@@ -1,6 +1,7 @@
 import { waitingQueue, playingPlayers, activeGames, pendingMatches, onlinePlayers, broadcastStats } from './state.js';
 import { Question } from '../models/questions.model.js';
 import { Game } from '../models/game.model.js';
+import crypto from "crypto";
 
 const difficultyRank = { easy: 1, medium: 2, hard: 3 };
 const getLowerDifficulty = (d1, d2) => difficultyRank[d1] <= difficultyRank[d2] ? d1 : d2;
@@ -20,7 +21,13 @@ export const startGame = async (io, player1, player2, matchConfig) => {
         const formattedDifficulty = matchConfig.difficulty.charAt(0).toUpperCase() + matchConfig.difficulty.slice(1);
         
         const randomQuestions = await Question.aggregate([
-            { $match: { difficulty: formattedDifficulty, "topicTags.name": new RegExp(matchConfig.topic, 'i') } },
+            {
+                $match: {
+                    difficulty: formattedDifficulty,
+                    "topicTags.name": new RegExp(matchConfig.topic, 'i'),
+                    sampleTestCase: { $exists: true, $type: 'array', $ne: [] }
+                }
+            },
             { $sample: { size: 1 } }
         ]);
 
@@ -32,13 +39,15 @@ export const startGame = async (io, player1, player2, matchConfig) => {
             return; 
         }
 
-        const gameRoomId = `game_${Date.now()}_${player1.userId}_${player2.userId}`;
+        // 1. Generate a clean, 16-character roomId just like the HTTP controller
+        const gameRoomId = crypto.randomBytes(8).toString("hex");
 
+        // 2. Create the Game document using the correct schema values
         await Game.create({
-            roomId: gameRoomId,
+            roomId: gameRoomId, // Clean ID!
             players: [
-                { user: player1.userId, socketId: player1.socketId },
-                { user: player2.userId, socketId: player2.socketId }
+                { user: player1.userId, socketId: player1.socketId, status: 'connected' },
+                { user: player2.userId, socketId: player2.socketId, status: 'connected' }
             ],
             questions: [selectedQuestion._id],
             settings: { duration: matchConfig.timeLimit, mode: 'classic' },
