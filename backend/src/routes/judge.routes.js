@@ -4,7 +4,7 @@ import { verifyJWT } from "../middlewares/auth.middleware.js"; // Assuming you w
 
 const router = Router();
 
-router.use(verifyJWT); // Secure the route
+// router.use(verifyJWT); // Secure the route
 router.post("/run", executeCode);
 
 export default router;
