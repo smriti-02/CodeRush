@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { socket } from '../api/socket'; 
 import axiosInstance from '../api/axios'; // Ensure your axios instance is correctly configured
+import axios from 'axios';
 
 export default function Arena() {
   const { gameId } = useParams();
@@ -16,13 +17,16 @@ export default function Arena() {
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [loading, setLoading] = useState(true);
+  const [output, setOutput] = useState("");
 
   useEffect(() => {
     // 1. Fetch Dynamic Game Data from Database
     const fetchArenaData = async () => {
       try {
         // Adjust this endpoint if your routes are setup differently (e.g., /api/games/)
-        const response = await axiosInstance.get(`/games/${gameId}`); 
+        const response = await axios.get(`http://localhost:8000/api/v1/games/arena/${gameId}`, {
+            withCredentials: true
+        });
         const gameData = response.data.data;
 
         // Pull the first question from the populated questions array
@@ -52,6 +56,8 @@ export default function Arena() {
     
     fetchArenaData();
 
+    
+
     // 2. Socket Listeners
     socket.emit('rejoinMatch', { gameId });
     socket.on('timerUpdate', ({ timeLeft }) => setTimeLeft(timeLeft));
@@ -71,7 +77,31 @@ export default function Arena() {
     const s = (seconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
+  const handleRunCode = async () => {
+    // 1. Tell the socket we are compiling
+    socket.emit('playerStatusUpdate', { gameId, status: "Compiling..." });
 
+    try {
+        // 2. Actually send the code to your backend execution route
+        const response = await axios.post('http://localhost:8000/api/v1/judge/run', {
+            questionId: questionData._id,           // Must pass the question ID
+            sourceCode: code,                       // Controller expects 'sourceCode', not 'code'
+            langSlug: language,                     // Controller expects 'langSlug'
+            languageId: 93,                         // Replace 93 with your dynamic language ID logic if needed
+            testCases: questionData.sampleTestCase  // Must pass the test cases
+        }, { withCredentials: true });
+
+        // 3. Log the output and reset status
+        console.log("Execution Result:", response.data);
+        setOutput(response.data.output);
+        socket.emit('playerStatusUpdate', { gameId, status: "Idle" });
+
+    } catch (error) {
+        console.error("Execution crashed:", error);
+        setOutput(error.response?.data?.message || "Error executing code");
+        socket.emit('playerStatusUpdate', { gameId, status: "Error" });
+    }
+  };
   if (loading) return <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">Loading Arena...</div>;
 
   return (
@@ -139,8 +169,11 @@ export default function Arena() {
           </select>
           
           <div className="space-x-3">
-            <button onClick={() => socket.emit('playerStatusUpdate', { gameId, status: "Compiling..." })} className="bg-gray-700 text-gray-200 px-5 py-1.5 rounded-md text-sm font-semibold hover:bg-gray-600 transition-colors">
-              Run
+            <button 
+                onClick={handleRunCode} 
+                className="bg-gray-700 text-gray-200 px-5 py-1.5 rounded-md text-sm font-semibold hover:bg-gray-600 transition-colors"
+            >
+                Run
             </button>
             <button onClick={() => socket.emit('playerStatusUpdate', { gameId, status: "Submitted code!" })} className="bg-green-600/90 text-white px-5 py-1.5 rounded-md text-sm font-semibold hover:bg-green-500 transition-colors shadow-lg shadow-green-900/20">
               Submit

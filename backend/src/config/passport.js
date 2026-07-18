@@ -24,7 +24,7 @@ const generateUniqueUsername = async (baseName) => {
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.BACKEND_URL || 'https://code-rush-vosk.vercel.app'}/api/v1/users/auth/google/callback`
+    callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/v1/users/auth/google/callback`
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ googleId: profile.id });
@@ -59,7 +59,7 @@ passport.use(new GoogleStrategy({
 passport.use(new GitHubStrategy({
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: `${process.env.BACKEND_URL || 'https://code-rush-vosk.vercel.app'}/api/v1/users/auth/github/callback`
+    callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/v1/users/auth/github/callback`
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ githubId: profile.id });

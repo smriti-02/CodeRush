@@ -4,14 +4,14 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { sendToJudge } from "../services/judge.services.js";
 
 export const executeCode = asyncHandler(async (req, res) => {
-    const { questionId, sourceCode, languageId, langSlug } = req.body;
+    const { questionId, sourceCode, languageId, langSlug, testCases } = req.body;
 
-    if (!questionId || !sourceCode || !languageId || !langSlug) {
+    if (!questionId || !sourceCode || !languageId || !langSlug || !testCases) {
         throw new ApiError(400, "Missing required execution parameters.");
     }
 
     // Call the service we updated earlier
-    const result = await sendToJudge(questionId, sourceCode, languageId, langSlug);
+    const result = await sendToJudge(questionId, sourceCode, languageId, langSlug, testCases);
 
     // Judge0 returns a token, or the direct result if wait=true
     return res.status(200).json(

@@ -115,31 +115,46 @@ export const findMatch = asyncHandler(async (req, res) => {
         const opponentId = matchQueue.shift();
 
         // Build the dynamic match filter criteria
-        const matchCriteria = {};
+        // 1. Initialize criteria forcing the presence of sample test cases
+        const matchCriteria = {
+            sampleTestCase: { $exists: true, $type: 'array', $ne: [] },
+            sampleOutputs: { $exists: true, $type: 'array', $ne: [] }
+        };
 
         if (difficulty) {
             matchCriteria.difficulty = difficulty;
         }
 
         if (tags && Array.isArray(tags) && tags.length > 0) {
-            // Matches questions that have AT LEAST ONE of the selected tags matching the slug
             matchCriteria["topicTags.slug"] = { $in: tags };
         }
 
-        // Aggregate with filtering before sampling
         let randomQuestion = await Question.aggregate([
             { $match: matchCriteria },
             { $sample: { size: 1 } }
         ]);
 
-        // Fallback: If no question matches the specific tags/difficulty filter, 
-        // pull any random question so the game doesn't crash.
+        // 2. Fix the fallback to ALSO strictly require test cases
         if (!randomQuestion || randomQuestion.length === 0) {
-            randomQuestion = await Question.aggregate([{ $sample: { size: 1 } }]);
+            randomQuestion = await Question.aggregate([
+                { 
+                    $match: { 
+                        sampleTestCase: { $exists: true, $type: 'array', $ne: [] } 
+                    } 
+                },
+                { $sample: { size: 1 } }
+            ]);
         }
         
         if (!randomQuestion || randomQuestion.length === 0) {
-            throw new ApiError(500, "No questions found in database to start a match");
+            randomQuestion = await Question.aggregate([
+                {
+                    $match: {
+                        sampleTestCase: { $exists: true, $type: 'array', $ne: [] } 
+                    }
+                },
+                { $sample: { size: 1 } }
+            ]);
         }
 
         const generatedRoomId = crypto.randomBytes(8).toString("hex");
@@ -161,10 +176,11 @@ export const findMatch = asyncHandler(async (req, res) => {
             roomId: generatedRoomId,
             status: 'Pending'
         });
-
         // Emit real-time event to players
-        io.emit(`matchFound:${userId}`, { gameId: newGame._id });
-        io.emit(`matchFound:${opponentId}`, { gameId: newGame._id });
+        io.emit(`matchFound:${userId}`, { gameId: newGame.roomId });
+        io.emit(`matchFound:${opponentId}`, { gameId: newGame.roomId });
+
+        return res.status(201).json(new ApiResponse(201, { gameId: newGame.roomId }, "Match found!"));
 
         return res.status(201).json(new ApiResponse(201, { gameId: newGame._id }, "Match found!"));
     } else {
