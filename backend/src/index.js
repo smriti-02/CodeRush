@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import connectDB from "./db/index.js";
-import { app } from "./app.js";
+import app from "./app.js";
 import { Server } from "socket.io";
 import http from "http";
 import { verifySocketJWT } from "./middlewares/socketAuth.middleware.js";
