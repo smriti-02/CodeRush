@@ -5,6 +5,18 @@ import Editor from '@monaco-editor/react';
 import { socket } from '../api/socket'; 
 import axiosInstance from '../api/axios'; // Ensure your axios instance is correctly configured
 import axios from 'axios';
+const LANGUAGE_IDS = {
+    'javascript': 93, // Node.js
+    'python': 71,     // Python 3
+    'python3': 71, 
+    'java': 62,       // Java (OpenJDK)
+    'cpp': 54,        // C++ (GCC)
+    'c': 50,          // C (GCC)
+    'csharp': 51,     // C#
+    'ruby': 72,       // Ruby
+    'golang': 60,     // Go
+    'rust': 73        // Rust
+};
 
 export default function Arena() {
   const { gameId } = useParams();
@@ -30,7 +42,7 @@ export default function Arena() {
         const gameData = response.data.data;
 
         // Pull the first question from the populated questions array
-        const question = gameData.questions && gameData.questions[0]; 
+       const question = gameData.question;
 
         if (!question) {
             console.error("No question found in this game record:", gameData);
@@ -80,14 +92,22 @@ export default function Arena() {
   const handleRunCode = async () => {
     // 1. Tell the socket we are compiling
     socket.emit('playerStatusUpdate', { gameId, status: "Compiling..." });
+    const currentLangId = LANGUAGE_IDS[language] || 62;
 
+    console.log("SENDING PAYLOAD:", {
+        questionId: questionData._id,
+        sourceCode: code,
+        langSlug: language,
+        languageId: currentLangId,
+        testCases: questionData.sampleTestCase
+    });
     try {
         // 2. Actually send the code to your backend execution route
         const response = await axios.post('http://localhost:8000/api/v1/judge/run', {
             questionId: questionData._id,           // Must pass the question ID
             sourceCode: code,                       // Controller expects 'sourceCode', not 'code'
             langSlug: language,                     // Controller expects 'langSlug'
-            languageId: 93,                         // Replace 93 with your dynamic language ID logic if needed
+            languageId: currentLangId,              // Use the dynamically determined language ID
             testCases: questionData.sampleTestCase  // Must pass the test cases
         }, { withCredentials: true });
 

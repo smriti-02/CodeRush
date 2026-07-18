@@ -11,31 +11,38 @@ import crypto from "crypto"; // Used to generate unique roomId
 
 
 export const getArenaData = asyncHandler(async (req, res) => {
-    const { roomId } = req.params;
+    // 1. Foolproof extraction: Grabs the ID from the URL regardless of the parameter name in game.routes.js
+    const urlId = Object.values(req.params)[0];
 
-    // Fetch the game and populate the questions array
-    const game = await Game.findOne({ roomId }).populate('questions');
+    if (!urlId) {
+        throw new ApiError(400, "No ID provided in the URL");
+    }
+
+    // 2. Fetch the game using the clean ID
+    const game = await Game.findOne({ roomId: urlId }).populate('questions');
 
     if (!game) {
-        throw new ApiError(404, "Match not found");
+        throw new ApiError(404, `Match not found for ID: ${urlId}`);
     }
 
     const question = game.questions[0]; // Active question
 
     return res.status(200).json(
         new ApiResponse(200, {
+           
             gameStatus: game.status,
             settings: game.settings,
             question: {
+                _id: question._id,
                 title: question.title,
                 difficulty: question.difficulty,
                 content: question.content,
-                // Only send the starter code to the frontend! Do not send the driverCode.
-                codeSnippets: question.codeSnippets.map(s => ({
+                // Only send the starter code to the frontend!
+                codeSnippets: question.codeSnippets?.map(s => ({
                     lang: s.lang,
                     langSlug: s.langSlug,
                     code: s.code
-                })),
+                })) || [],
                 sampleTestCase: question.sampleTestCase,
                 topicTags: question.topicTags
             }
