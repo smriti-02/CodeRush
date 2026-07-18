@@ -37,3 +37,4 @@ connectDB()
 });
 
 export { io };
+export default app;

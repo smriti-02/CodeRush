@@ -27,6 +27,7 @@ app.use(
           "'unsafe-inline'", 
           "'unsafe-eval'", 
           "http://localhost:5173",
+          "https://code-rush-vosk.vercel.app",
           "https://cdn.jsdelivr.net" // REQUIRED FOR MONACO
         ],
         
@@ -35,6 +36,8 @@ app.use(
           "http://localhost:8000", 
           "ws://localhost:5173", 
           "http://localhost:5173",
+          "https://code-rush-vosk.vercel.app",
+          "wss://code-rush-vosk.vercel.app",
           "https://accounts.google.com", 
           "https://github.com"
         ],
@@ -44,13 +47,15 @@ app.use(
           "data:", 
           "http://localhost:5173",
           "https://lh3.googleusercontent.com", 
+          "https://code-rush-vosk.vercel.app",
           "https://avatars.githubusercontent.com"
         ],
         
         "style-src": [
           "'self'", 
           "'unsafe-inline'", 
-          "http://localhost:5173"
+          "http://localhost:5173",
+         "https://code-rush-vosk.vercel.app"
         ],
 
         // REQUIRED FOR MONACO SYNTAX HIGHLIGHTING
