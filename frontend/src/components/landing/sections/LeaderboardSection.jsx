@@ -8,16 +8,18 @@ export const LeaderboardSection = ({ leaderboardData }) => {
       
       <div className="pointer-events-auto mt-auto mb-24 relative grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
         {/* Left Side: Text & Leaderboard */}
-        <div className="flex flex-col">
-          <div className="mb-12 text-left">
-            <h2 className="text-[#ffd700] text-sm font-bold tracking-widest uppercase mb-4 drop-shadow-md">
-              02 TROPHY + LEADERBOARD
+        <div className="flex flex-col h-full max-w-xl">
+          <div className="mb-10">
+            <h2 className="text-[#39d353] text-sm font-bold font-mono tracking-widest uppercase mb-4 drop-shadow-md">
+              02 BATTLES
             </h2>
-            <h3 className="text-[70px] font-black tracking-tighter uppercase text-white drop-shadow-lg leading-none">
-              EARN GLORY
+            <h3 className="text-[70px] font-display font-black tracking-tighter uppercase text-white mb-2 leading-[0.9] drop-shadow-lg">
+              GLOBAL LIVE<br/>
+              <span className="text-[#39d353] font-accent italic font-normal text-[85px] leading-[0.8] tracking-normal capitalize">Leaderboard</span>
             </h3>
-            <p className="text-gray-400 text-lg mt-6 max-w-sm leading-relaxed">
-              Your efforts come together, shaping your victory.
+            <p className="text-gray-400 text-lg mt-6 max-w-md leading-relaxed">
+              Real-time standings of top developers worldwide.
+              Prove your skills and secure your rank.
             </p>
           </div>
           

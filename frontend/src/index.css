@@ -1,1 +1,12 @@
 @import "tailwindcss";
+
+@theme {
+  --font-display: "Clash Display", sans-serif;
+  --font-accent: "Instrument Serif", serif;
+  --font-body: "General Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  font-family: var(--font-body);
+}

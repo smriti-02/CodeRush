@@ -1,13 +1,16 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useScroll } from 'framer-motion';
 
 import { SharedParticleSystem } from '../components/landing/3d/SharedParticleSystem';
 import { HeroSection } from '../components/landing/sections/HeroSection';
 import { LeaderboardSection } from '../components/landing/sections/LeaderboardSection';
 import { AICoachSection } from '../components/landing/sections/AICoachSection';
+import { ContactSection } from '../components/landing/sections/ContactSection';
+import { AuthModal } from '../components/landing/AuthModal';
 
 export default function CodeRushHero() {
   const containerRef = useRef(null);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end end"]
@@ -26,15 +29,23 @@ export default function CodeRushHero() {
   ];
 
   return (
-    <div ref={containerRef} className="relative bg-[#020503] text-white font-sans min-h-[300vh] overflow-x-hidden">
+    <div className="relative bg-[#020503] text-white font-sans overflow-x-hidden">
       <SharedParticleSystem scrollYProgress={scrollYProgress} />
       
-      {/* Scrollable Content Layers */}
-      <div className="relative z-10 w-full flex flex-col">
-        <HeroSection />
+      {/* 3D Scrollable Content Layers */}
+      <div ref={containerRef} className="relative z-10 w-full flex flex-col min-h-[300vh]">
+        <HeroSection onOpenAuth={() => setIsAuthOpen(true)} />
         <LeaderboardSection leaderboardData={leaderboardData} />
         <AICoachSection />
       </div>
+
+      {/* Footer Content */}
+      <div className="relative z-20 w-full bg-[#020503]">
+        <ContactSection />
+      </div>
+
+      {/* Auth Modal Overlay */}
+      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} initialMode="login" />
     </div>
   );
 }

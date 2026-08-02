@@ -98,7 +98,7 @@ export const generateImageVoxelStates = async () => {
     ]);
 
     const gunPoints = extractParticlesFromImage(gunImg, 30, 4, false);
-    const trophyPoints = extractParticlesFromImage(trophyImg, 12, 6, false);
+    const trophyPoints = extractParticlesFromImage(trophyImg, 18, 6, false);
     const robotPoints = extractParticlesFromImage(robotImg, 18, 4, true);
 
     // To make the transition chaotic, we shuffle the destination points independently
