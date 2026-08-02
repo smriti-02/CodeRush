@@ -11,6 +11,7 @@ function App() {
     <BrowserRouter>
       <Toaster />
       <Routes>
+        <Route path="/" element={<CodeRushHero />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<Dashboard />} />

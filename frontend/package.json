@@ -12,6 +12,7 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@react-three/fiber": "^9.6.1",
+    "@react-three/postprocessing": "^3.0.4",
     "axios": "^1.13.2",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.23.0",
