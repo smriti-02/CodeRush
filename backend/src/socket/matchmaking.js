@@ -25,7 +25,7 @@ export const startGame = async (io, player1, player2, matchConfig) => {
                 $match: {
                     difficulty: formattedDifficulty,
                     "topicTags.name": new RegExp(matchConfig.topic, 'i'),
-                    sampleTestCase: { $exists: true, $type: 'array', $ne: [] }
+                    allTestCases: { $exists: true, $type: 'array', $ne: [] }
                 }
             },
             { $sample: { size: 1 } }

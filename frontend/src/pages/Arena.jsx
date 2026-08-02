@@ -30,6 +30,8 @@ export default function Arena() {
   const [language, setLanguage] = useState("javascript");
   const [loading, setLoading] = useState(true);
   const [output, setOutput] = useState("");
+  const [execResult, setExecResult] = useState(null);
+  const [wrongSubmissions, setWrongSubmissions] = useState(0);
 
   useEffect(() => {
     // 1. Fetch Dynamic Game Data from Database
@@ -104,24 +106,62 @@ export default function Arena() {
     try {
         // 2. Actually send the code to your backend execution route
         const response = await axios.post('http://localhost:8000/api/v1/judge/run', {
-            questionId: questionData._id,           // Must pass the question ID
-            sourceCode: code,                       // Controller expects 'sourceCode', not 'code'
-            langSlug: language,                     // Controller expects 'langSlug'
-            languageId: currentLangId,              // Use the dynamically determined language ID
-            testCases: questionData.sampleTestCase  // Must pass the test cases
+          questionId: questionData._id,
+          sourceCode: code,
+          langSlug: language,
+          languageId: currentLangId,
+          testCases: questionData.sampleTestCase,
+          sessionId: gameId
         }, { withCredentials: true });
 
         // 3. Log the output and reset status
         console.log("Execution Result:", response.data);
-        setOutput(response.data.output);
+        // Backend wraps the result in ApiResponse -> response.data.data
+        const result = response.data?.data;
+        setExecResult(result || null);
         socket.emit('playerStatusUpdate', { gameId, status: "Idle" });
 
     } catch (error) {
         console.error("Execution crashed:", error);
-        setOutput(error.response?.data?.message || "Error executing code");
+        setExecResult({ status: 'Error', stdout: '', stderr: error.response?.data?.message || error.message || 'Error executing code' });
         socket.emit('playerStatusUpdate', { gameId, status: "Error" });
     }
   };
+  const handleSubmitCode = async () => {
+    socket.emit('playerStatusUpdate', { gameId, status: "Submitting..." });
+    const currentLangId = LANGUAGE_IDS[language] || 62;
+
+    try {
+        const response = await axios.post('http://localhost:8000/api/v1/judge/submit', {
+          questionId: questionData._id,
+          sourceCode: code,
+          langSlug: language,
+          languageId: currentLangId,
+          sessionId: gameId,
+          wrongSubmissions,
+          userComplexity: 'O(n)' 
+        }, { withCredentials: true });
+
+        const data = response.data?.data;
+        const result = data?.result;
+        const eloData = data?.eloData;
+        
+        setExecResult(result || null);
+        
+        if (result?.status === "Accepted") {
+            socket.emit('playerStatusUpdate', { gameId, status: "Finished!" });
+            alert(`Match Won! Elo Change: ${eloData?.netEloChange > 0 ? '+' : ''}${eloData?.netEloChange}. New Elo: ${eloData?.newElo}`);
+        } else {
+            setWrongSubmissions(prev => prev + 1);
+            socket.emit('playerStatusUpdate', { gameId, status: "Wrong Answer" });
+        }
+    } catch (error) {
+        console.error("Submission crashed:", error);
+        setExecResult({ status: 'Error', stdout: '', stderr: error.response?.data?.message || error.message || 'Error executing code' });
+        socket.emit('playerStatusUpdate', { gameId, status: "Error" });
+    }
+  };
+
   if (loading) return <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">Loading Arena...</div>;
 
   return (
@@ -195,7 +235,7 @@ export default function Arena() {
             >
                 Run
             </button>
-            <button onClick={() => socket.emit('playerStatusUpdate', { gameId, status: "Submitted code!" })} className="bg-green-600/90 text-white px-5 py-1.5 rounded-md text-sm font-semibold hover:bg-green-500 transition-colors shadow-lg shadow-green-900/20">
+            <button onClick={handleSubmitCode} className="bg-green-600/90 text-white px-5 py-1.5 rounded-md text-sm font-semibold hover:bg-green-500 transition-colors shadow-lg shadow-green-900/20">
               Submit
             </button>
           </div>
@@ -213,6 +253,26 @@ export default function Arena() {
             }}
             options={{ minimap: { enabled: false }, fontSize: 15, wordWrap: "on", padding: { top: 16 } }}
           />
+        </div>
+        <div className="h-48 p-4 bg-[#0b0f13] border-t border-gray-800 text-sm overflow-auto">
+          <h3 className="text-sm font-semibold text-white mb-2">Execution Result</h3>
+          {!execResult && <p className="text-gray-500">No execution yet.</p>}
+          {execResult && (
+            <div className="text-gray-300">
+              <div className="mb-2"><strong>Status:</strong> <span className="font-mono">{execResult.status}</span></div>
+              <div className="mb-2"><strong>Stdout:</strong>
+                <pre className="whitespace-pre-wrap bg-[#071018] p-2 rounded mt-1">{execResult.stdout || ''}</pre>
+              </div>
+              <div className="mb-2"><strong>Stderr:</strong>
+                <pre className="whitespace-pre-wrap bg-[#071018] p-2 rounded mt-1 text-red-400">{execResult.stderr || ''}</pre>
+              </div>
+              {execResult.expected_output && (
+                <div className="text-gray-400"><strong>Expected:</strong>
+                  <pre className="whitespace-pre-wrap bg-[#071018] p-2 rounded mt-1">{execResult.expected_output}</pre>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

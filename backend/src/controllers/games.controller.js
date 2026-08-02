@@ -124,8 +124,7 @@ export const findMatch = asyncHandler(async (req, res) => {
         // Build the dynamic match filter criteria
         // 1. Initialize criteria forcing the presence of sample test cases
         const matchCriteria = {
-            sampleTestCase: { $exists: true, $type: 'array', $ne: [] },
-            sampleOutputs: { $exists: true, $type: 'array', $ne: [] }
+            allTestCases: { $exists: true, $type: 'array', $ne: [] }
         };
 
         if (difficulty) {
@@ -146,7 +145,7 @@ export const findMatch = asyncHandler(async (req, res) => {
             randomQuestion = await Question.aggregate([
                 { 
                     $match: { 
-                        sampleTestCase: { $exists: true, $type: 'array', $ne: [] } 
+                        allTestCases: { $exists: true, $type: 'array', $ne: [] } 
                     } 
                 },
                 { $sample: { size: 1 } }
@@ -157,7 +156,7 @@ export const findMatch = asyncHandler(async (req, res) => {
             randomQuestion = await Question.aggregate([
                 {
                     $match: {
-                        sampleTestCase: { $exists: true, $type: 'array', $ne: [] } 
+                        allTestCases: { $exists: true, $type: 'array', $ne: [] } 
                     }
                 },
                 { $sample: { size: 1 } }
