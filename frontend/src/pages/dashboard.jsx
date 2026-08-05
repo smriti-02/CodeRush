@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { socket } from '../api/socket';
 import { Panel, Group, Separator } from "react-resizable-panels";
@@ -37,12 +37,32 @@ const TIPS = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Settings State
-  const [selectedTopics, setSelectedTopics] = useState(["Array"]);
-  const [timeLimit, setTimeLimit] = useState(20);
-  const [difficulty, setDifficulty] = useState('medium');
-  const [strictMode, setStrictMode] = useState(false);
+  const [selectedTopics, setSelectedTopics] = useState(() => {
+    const saved = localStorage.getItem('cr_topics');
+    return saved ? JSON.parse(saved) : ["Array"];
+  });
+  const [timeLimit, setTimeLimit] = useState(() => {
+    const saved = localStorage.getItem('cr_timeLimit');
+    return saved ? JSON.parse(saved) : 20;
+  });
+  const [difficulty, setDifficulty] = useState(() => {
+    const saved = localStorage.getItem('cr_difficulty');
+    return saved ? JSON.parse(saved) : 'medium';
+  });
+  const [strictMode, setStrictMode] = useState(() => {
+    const saved = localStorage.getItem('cr_strictMode');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('cr_topics', JSON.stringify(selectedTopics));
+    localStorage.setItem('cr_timeLimit', JSON.stringify(timeLimit));
+    localStorage.setItem('cr_difficulty', JSON.stringify(difficulty));
+    localStorage.setItem('cr_strictMode', JSON.stringify(strictMode));
+  }, [selectedTopics, timeLimit, difficulty, strictMode]);
 
   // Socket & Matchmaking State
   const [playerStats, setPlayerStats] = useState({ online: 0, playing: 0, inQueue: 0 });
@@ -176,6 +196,14 @@ const joinQueue = () => {
       strictMode
     });
   };
+
+  useEffect(() => {
+    if (location.state?.requeue) {
+      handleJoinQueue();
+      // Clear the state so it doesn't requeue again on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handleCancelSearch = () => {
     setIsSearching(false);

@@ -143,4 +143,54 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
     
 });
 
+export const getUserProfile = asyncHandler(async (req, res) => {
+    // Populate friends and game history
+    const user = await User.findById(req.user._id)
+        .populate('friends', 'username avatar elo status')
+        .populate({
+            path: 'gameHistory',
+            populate: {
+                path: 'players.user',
+                select: 'username avatar elo'
+            }
+        })
+        .select("-password -refreshToken");
 
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    return res.status(200).json(new ApiResponse(200, user, "User profile fetched successfully"));
+});
+
+export const addFriend = asyncHandler(async (req, res) => {
+    const { friendUsername } = req.body;
+    
+    if (!friendUsername) {
+        throw new ApiError(400, "Friend username is required");
+    }
+
+    if (friendUsername.toLowerCase() === req.user.username.toLowerCase()) {
+        throw new ApiError(400, "You cannot add yourself as a friend");
+    }
+
+    const friend = await User.findOne({ username: new RegExp('^' + friendUsername + '$', 'i') });
+    
+    if (!friend) {
+        throw new ApiError(404, "User not found");
+    }
+
+    const currentUser = await User.findById(req.user._id);
+    
+    if (currentUser.friends.includes(friend._id)) {
+        throw new ApiError(400, "User is already your friend");
+    }
+
+    currentUser.friends.push(friend._id);
+    await currentUser.save({ validateBeforeSave: false });
+
+    // Return the newly added friend to update UI immediately
+    const addedFriend = await User.findById(friend._id).select("username avatar elo status");
+
+    return res.status(200).json(new ApiResponse(200, addedFriend, "Friend added successfully"));
+});

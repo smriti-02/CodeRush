@@ -4,7 +4,9 @@ import {
     loginUser,
     generateAccessAndRefreshTokens,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    getUserProfile,
+    addFriend
 } from '../controllers/user.controller.js';
 import { verifyJWT }  from '../middlewares/auth.middleware.js';
 import passport from 'passport';
@@ -51,13 +53,8 @@ router.get("/auth/github/callback",
            .redirect(`${process.env.FRONTEND_URL}/dashboard`); // Redirect to your frontend
     }
 );
-router.route("/profile").get(verifyJWT, async (req, res) => {
-    return res.status(200).json({
-        status: 200,
-        data: req.user,
-        message: "User profile fetched successfully."
-    });
-});
+router.route("/profile").get(verifyJWT, getUserProfile);
+router.route("/add-friend").post(verifyJWT, addFriend);
 
 
 export default router;

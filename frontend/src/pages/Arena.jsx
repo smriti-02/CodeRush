@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { socket } from '../api/socket'; 
 import axiosInstance from '../api/axios';
 import axios from 'axios';
 import { Panel, Group, Separator } from "react-resizable-panels";
-import { GripVertical, GripHorizontal } from "lucide-react";
+import { GripVertical, GripHorizontal, Trophy, Frown, Brain, RefreshCw, ArrowLeft, User } from "lucide-react";
+import ElectricBorder from '../components/ElectricBorder';
+import AnimatedNumber from '../components/AnimatedNumber';
 
 // Restrict languages to the 4 requested by user
 const ALLOWED_LANGUAGES = {
@@ -28,6 +30,8 @@ export default function Arena() {
   const [loading, setLoading] = useState(true);
   const [execResult, setExecResult] = useState(null);
   const [wrongSubmissions, setWrongSubmissions] = useState(0);
+  const [matchResult, setMatchResult] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchArenaData = async () => {
@@ -65,7 +69,9 @@ export default function Arena() {
     socket.emit('rejoinMatch', { gameId });
     socket.on('timerUpdate', ({ timeLeft }) => setTimeLeft(timeLeft));
     socket.on('opponentStatusUpdate', ({ status }) => setOpponentStatus(status));
-    socket.on('matchEnded', ({ reason }) => alert(`Match Ended! Reason: ${reason}`));
+    socket.on('matchEnded', ({ reason }) => {
+      setMatchResult({ status: 'lost', reason });
+    });
 
     return () => {
       socket.off('timerUpdate');
@@ -128,7 +134,7 @@ export default function Arena() {
         
         if (result?.status === "Accepted") {
             socket.emit('playerStatusUpdate', { gameId, status: "Finished!" });
-            alert(`Match Won! Elo Change: ${eloData?.netEloChange > 0 ? '+' : ''}${eloData?.netEloChange}. New Elo: ${eloData?.newElo}`);
+            setMatchResult({ status: 'won', eloData });
         } else {
             setWrongSubmissions(prev => prev + 1);
             socket.emit('playerStatusUpdate', { gameId, status: "Wrong Answer" });
@@ -327,6 +333,99 @@ export default function Arena() {
 
         </Group>
       </div>
+
+      {/* MATCH RESULTS MODAL */}
+      {matchResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4">
+          <ElectricBorder 
+            color={matchResult.status === 'won' ? '#39d353' : '#ef4444'} 
+            speed={1.5} 
+            chaos={0.15} 
+            borderRadius={24}
+            className="w-full max-w-lg"
+          >
+            <div className="relative w-full bg-[#0a0a0a]/90 backdrop-blur-xl rounded-[22px] overflow-hidden flex flex-col">
+            
+            {/* Header / Banner */}
+            <div className={`p-8 flex flex-col items-center justify-center border-b ${matchResult.status === 'won' ? 'border-[#39d353]/30 bg-[#39d353]/5' : 'border-red-500/30 bg-red-500/5'}`}>
+              {matchResult.status === 'won' ? (
+                <Trophy size={64} className="text-[#39d353] drop-shadow-[0_0_15px_rgba(57,211,83,0.5)] mb-4" />
+              ) : (
+                <Frown size={64} className="text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)] mb-4" />
+              )}
+              <h2 className={`text-4xl font-black tracking-widest uppercase ${matchResult.status === 'won' ? 'text-[#39d353] drop-shadow-[0_0_10px_rgba(57,211,83,0.3)]' : 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.3)]'}`}>
+                {matchResult.status === 'won' ? 'VICTORY' : 'DEFEAT'}
+              </h2>
+              {matchResult.status === 'lost' && (
+                <p className="text-gray-400 mt-2 font-mono text-sm text-center">{matchResult.reason}</p>
+              )}
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Stats Row */}
+              {matchResult.eloData && (
+                <div className="flex items-center justify-between bg-[#111] border border-neutral-800 rounded-xl p-4">
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Elo Change</span>
+                    <span className={`text-xl font-bold font-mono ${matchResult.eloData.netEloChange > 0 ? 'text-[#39d353]' : 'text-red-500'}`}>
+                      {matchResult.eloData.netEloChange > 0 ? '+' : ''}{matchResult.eloData.netEloChange}
+                    </span>
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <span className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">New Rating</span>
+                    <span className="text-xl font-bold text-white font-mono">
+                      <AnimatedNumber 
+                        from={matchResult.eloData.newElo - matchResult.eloData.netEloChange} 
+                        to={matchResult.eloData.newElo} 
+                        duration={2000} 
+                      />
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* AI Analysis Placeholder */}
+              <div className="border border-neutral-800 rounded-xl p-5 relative overflow-hidden bg-gradient-to-br from-[#111] to-[#0a0a0a]">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl" />
+                <div className="flex items-center gap-3 mb-2 relative z-10">
+                  <Brain size={20} className="text-blue-400" />
+                  <h3 className="text-sm font-bold text-gray-200 uppercase tracking-widest">AI Code Analysis</h3>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed relative z-10">
+                  Coming soon. CodeRush AI will analyze your time complexity, memory efficiency, and suggest optimal alternative approaches to your solution.
+                </p>
+                <button disabled className="mt-3 text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 py-1.5 rounded-md font-semibold cursor-not-allowed opacity-50 relative z-10">
+                  Analyze (WIP)
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="p-4 bg-[#111]/80 border-t border-neutral-800 flex items-center justify-end gap-3">
+              <button 
+                onClick={() => navigate('/dashboard')}
+                className="px-5 py-2.5 rounded-lg text-sm font-bold text-gray-400 hover:text-white hover:bg-neutral-800/50 transition-all flex items-center gap-2"
+              >
+                <ArrowLeft size={16} /> Dashboard
+              </button>
+              <button 
+                onClick={() => navigate('/profile')}
+                className="px-5 py-2.5 rounded-lg text-sm font-bold text-gray-400 hover:text-white hover:bg-neutral-800/50 transition-all flex items-center gap-2"
+              >
+                <User size={16} /> Profile
+              </button>
+              <button 
+                onClick={() => navigate('/dashboard', { state: { requeue: true } })}
+                className="px-5 py-2.5 bg-[#39d353] hover:bg-[#2ea043] text-black rounded-lg text-sm font-bold transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(57,211,83,0.3)] hover:shadow-[0_0_25px_rgba(57,211,83,0.5)]"
+              >
+                <RefreshCw size={16} /> Play Again
+              </button>
+            </div>
+            
+            </div>
+          </ElectricBorder>
+        </div>
+      )}
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
