@@ -209,7 +209,7 @@ export default function Arena() {
           </Separator>
 
           {/* RIGHT COLUMN */}
-          <Panel id="editor-panel" order={2} minSize={30}>
+          <Panel id="editor-panel" order={2} defaultSize={55} minSize={30}>
             <Group orientation="vertical">
               
               {/* TOP: Editor */}
@@ -284,7 +284,7 @@ export default function Arena() {
               </Separator>
 
               {/* BOTTOM: Console */}
-              <Panel id="console" order={2} minSize={20}>
+              <Panel id="console" order={2} defaultSize={35} minSize={20}>
                 <div className="h-full p-6 bg-[#111111] overflow-auto rounded-br-xl custom-scrollbar">
                   <h3 className="text-xs font-bold font-mono text-gray-500 uppercase tracking-widest mb-4">Execution Result</h3>
                   {!execResult && <p className="text-sm font-mono text-neutral-600 italic">No execution yet. Run your code to see outputs.</p>}

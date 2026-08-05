@@ -65,7 +65,9 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
 
         // Create an identifier for this execution; prefer sessionId (gameId) when provided
         const execId = crypto.randomUUID();
-        const sandboxName = sessionId ? `coderush-engine-${sessionId}` : `coderush-engine-${execId}`;
+        // FIXED: Use a single static sandbox name to avoid creating thousands of snapshots.
+        // Files are already isolated by workDir = `/tmp/exec_${execId}` so concurrent runs won't collide.
+        const sandboxName = `coderush-engine-v1`;
 
         // Reuse sandbox from pool if available (avoids repeated create/delete)
         let sandbox = null;
@@ -87,8 +89,15 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
                         sandbox = await Sandbox.create({ name: sandboxName, resume: true });
                     }
                 } catch (err2) {
-                    // Re-throw original error if resume failed
-                    throw err;
+                    console.warn("Failed to get/resume sandbox, trying ephemeral fallback...", err2.message);
+                    try {
+                        // FALLBACK: If Vercel blocks us due to the 15GB Snapshot Storage limit,
+                        // we can bypass it by creating an ephemeral sandbox (persistent: false) 
+                        // which does not use any snapshot storage. It's slower, but it works for free!
+                        sandbox = await Sandbox.create({ persistent: false });
+                    } catch (err3) {
+                        throw err;
+                    }
                 }
             }
 

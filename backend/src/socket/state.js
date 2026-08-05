@@ -8,7 +8,8 @@ export const pendingMatches = new Map(); // Tracks matches waiting for user conf
 export const broadcastStats = (io) => {
     io.emit("playerCountUpdate", {
         online: onlinePlayers.size,
-        playing: playingPlayers.size
+        playing: playingPlayers.size,
+        inQueue: waitingQueue.length
     });
 };
 
