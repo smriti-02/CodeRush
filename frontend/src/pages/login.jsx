@@ -31,11 +31,13 @@ const Login = () => {
 
     // Helper functions to trigger Passport.js OAuth flows
     const continueWithGoogle = () => {
-        window.open("http://localhost:8000/api/v1/users/auth/google", "_self");
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
+        window.location.href = `${backendUrl}/users/auth/google`;
     };
 
     const continueWithGithub = () => {
-        window.open("http://localhost:8000/api/v1/users/auth/github", "_self");
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
+        window.location.href = `${backendUrl}/users/auth/github`;
     };
 
     return (

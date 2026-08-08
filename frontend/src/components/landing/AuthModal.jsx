@@ -56,11 +56,13 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   };
 
   const continueWithGoogle = () => {
-    window.location.href = "http://localhost:8000/api/v1/users/auth/google";
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
+    window.location.href = `${backendUrl}/users/auth/google`;
   };
 
   const continueWithGithub = () => {
-    window.location.href = "http://localhost:8000/api/v1/users/auth/github";
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
+    window.location.href = `${backendUrl}/users/auth/github`;
   };
 
   return (
