@@ -58,9 +58,9 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
             return await runLocally(stitchedCode, langSlug, testCasesToRun[0]?.input || "", testCasesToRun[0]?.output || "");
         }
 
-        // If not using local runner and no OIDC token is available in non-prod, fail fast
-        if (!process.env.VERCEL_OIDC_TOKEN && process.env.NODE_ENV !== 'production') {
-            throw new Error("Vercel OIDC token missing. Link the project (npx vercel link) and pull env (npx vercel env pull .env.local), or set USE_LOCAL_JUDGE=true for local runs.");
+        // If not using local runner and no Vercel token is available, fail fast
+        if (!process.env.VERCEL_OIDC_TOKEN && !process.env.VERCEL_API_TOKEN && process.env.NODE_ENV !== 'production') {
+            throw new Error("Vercel token missing. Set VERCEL_API_TOKEN or VERCEL_OIDC_TOKEN, or set USE_LOCAL_JUDGE=true for local runs.");
         }
 
         // Create an identifier for this execution; prefer sessionId (gameId) when provided

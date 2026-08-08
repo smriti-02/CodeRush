@@ -75,7 +75,7 @@ export default function Arena() {
   useEffect(() => {
     const fetchArenaData = async () => {
       try {
-        const response = await axios.get(`http://localhost:8000/api/v1/games/arena/${gameId}`, {
+        const response = await axiosInstance.get(`/games/arena/${gameId}`, {
             withCredentials: true
         });
         const gameData = response.data.data;
@@ -139,14 +139,14 @@ export default function Arena() {
     const currentLangId = ALLOWED_LANGUAGES[language]?.id || 62;
 
     try {
-        const response = await axios.post('http://localhost:8000/api/v1/judge/run', {
+        const response = await axiosInstance.post('/judge/run', {
           questionId: questionData._id,
           sourceCode: code,
           langSlug: language,
           languageId: currentLangId,
           testCases: questionData.sampleTestCase,
           sessionId: gameId
-        }, { withCredentials: true });
+        });
 
         const result = response.data?.data;
         setExecResult(result || null);
@@ -166,7 +166,7 @@ export default function Arena() {
     const currentLangId = ALLOWED_LANGUAGES[language]?.id || 62;
 
     try {
-        const response = await axios.post('http://localhost:8000/api/v1/judge/submit', {
+        const response = await axiosInstance.post('/judge/submit', {
           questionId: questionData._id,
           sourceCode: code,
           langSlug: language,
@@ -175,7 +175,7 @@ export default function Arena() {
           wrongSubmissions,
           userComplexity: 'O(n)',
           isFlagged: isFlagged.current
-        }, { withCredentials: true });
+        });
 
         const data = response.data?.data;
         const result = data?.result;

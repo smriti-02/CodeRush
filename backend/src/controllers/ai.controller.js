@@ -7,16 +7,13 @@ import axios from "axios";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-const callNemotron = async (systemPrompt, userPrompt) => {
+const callOpenRouter = async (messages, model = "nvidia/nemotron-3-ultra-550b-a55b:free") => {
     if (!OPENROUTER_API_KEY) {
         throw new ApiError(500, "OpenRouter API key is not configured.");
     }
     const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
-        model: "nvidia/nemotron-3-ultra-550b-a55b:free",
-        messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
-        ]
+        model,
+        messages
     }, {
         headers: {
             "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
@@ -68,7 +65,10 @@ export const getGameReview = asyncHandler(async (req, res) => {
 
     userPrompt += `Please review what I did right, what the opponent did (if applicable), whose approach was better in terms of time/space complexity, and what the most optimal approach to this problem is.`;
 
-    const review = await callNemotron(systemPrompt, userPrompt);
+    const review = await callOpenRouter([
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+    ]);
 
     return res.status(200).json(new ApiResponse(200, review, "Game review generated successfully."));
 });
@@ -110,7 +110,35 @@ export const getAccountAnalysis = asyncHandler(async (req, res) => {
 
     userPrompt += `Please provide a holistic account analysis detailing my weaknesses, strong suits, and specific recommendations for improvement.`;
 
-    const analysis = await callNemotron(systemPrompt, userPrompt);
+    const analysis = await callOpenRouter([
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+    ]);
 
     return res.status(200).json(new ApiResponse(200, analysis, "Account analysis generated successfully."));
+});
+
+export const askChatbot = asyncHandler(async (req, res) => {
+    const { context, messages } = req.body;
+
+    if (!context || !messages || !Array.isArray(messages)) {
+        throw new ApiError(400, "Missing context or invalid messages array");
+    }
+
+    const systemPrompt = `You are a helpful AI assistant for the competitive programming platform 'CodeRush'. 
+You have previously provided the following analysis/review to the user:
+---
+${context}
+---
+The user has follow-up questions about it. 
+CRITICAL RULE: You MUST ONLY answer questions strictly related to this review, competitive programming, algorithms, or data structures. If the user asks about anything unrelated (e.g. general knowledge, writing essays, recipes, etc.), politely decline and say you can only help with CodeRush and programming questions.`;
+
+    const fullMessages = [
+        { role: "system", content: systemPrompt },
+        ...messages
+    ];
+
+    const reply = await callOpenRouter(fullMessages, "google/gemma-4-31b-it:free");
+
+    return res.status(200).json(new ApiResponse(200, reply, "Chatbot replied successfully."));
 });

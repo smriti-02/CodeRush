@@ -163,7 +163,7 @@ export default function Profile() {
           {/* Header Profile Card */}
           <div className="bg-[#1a1917] rounded-xl border border-neutral-800/60 p-6 flex flex-col md:flex-row gap-6 shadow-xl relative overflow-hidden">
             <div className="w-32 h-32 rounded-lg bg-gradient-to-br from-neutral-800 to-[#111] border border-neutral-700/50 flex items-center justify-center shadow-lg relative group overflow-hidden shrink-0">
-               <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${profile.username}&backgroundColor=1a1917`} alt="avatar" className="w-full h-full object-cover" />
+               <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${profile.username}&backgroundColor=1a1917`} alt="avatar" className="w-full h-full object-cover" />
             </div>
             <div className="flex-1 space-y-3">
               <div className="flex items-start justify-between">
@@ -252,7 +252,7 @@ export default function Profile() {
                         <td className="px-4 py-4">
                           <Link to={`/profile/${opponent.username}`} className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded bg-neutral-800 flex items-center justify-center shrink-0">
-                              <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${opponent.username}&backgroundColor=1a1917`} className="w-full h-full object-cover rounded" alt=""/>
+                              <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${opponent.username}&backgroundColor=1a1917`} className="w-full h-full object-cover rounded" alt=""/>
                             </div>
                             <div className="flex flex-col">
                               <span className="font-bold text-gray-300 group-hover:text-[#39d353] transition-colors">{opponent.username} <span className="text-gray-500 font-normal">({opponent.elo})</span></span>
@@ -315,7 +315,7 @@ export default function Profile() {
                     {profile.friendRequests.map(req => (
                       <div key={req._id} className="flex items-center justify-between bg-[#22211f] p-2 rounded-lg border border-neutral-800">
                         <Link to={`/profile/${req.username}`} className="flex items-center gap-2 group">
-                          <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${req.username}&backgroundColor=111`} className="w-8 h-8 rounded" alt=""/>
+                          <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${req.username}&backgroundColor=111`} className="w-8 h-8 rounded" alt=""/>
                           <div>
                             <p className="text-xs font-bold text-gray-300 group-hover:text-white transition-colors">{req.username}</p>
                             <p className="text-[10px] text-gray-500 font-mono">Elo: {req.elo || 0}</p>
@@ -369,7 +369,7 @@ export default function Profile() {
               {profile.friends?.map((friend, i) => (
                 <Link to={`/profile/${friend.username}`} key={i} className="flex items-center gap-3 p-2 hover:bg-[#22211f] rounded-lg transition-colors group">
                   <div className="w-10 h-10 rounded bg-neutral-800 flex items-center justify-center relative shrink-0">
-                    <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${friend.username}&backgroundColor=111`} className="w-full h-full object-cover rounded" alt=""/>
+                    <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${friend.username}&backgroundColor=111`} className="w-full h-full object-cover rounded" alt=""/>
                     {friend.status === 'online' && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#39d353] rounded-full border-2 border-[#1a1917]"></div>}
                   </div>
                   <div>
