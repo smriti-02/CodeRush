@@ -1,4 +1,5 @@
 import { User } from '../models/user.model.js';
+import { Game } from '../models/game.model.js';
 import { asyncHandler } from '../utils/asyncHandler.js'; 
 import { ApiError } from '../utils/ApiError.js';     
 import { ApiResponse } from '../utils/ApiResponse.js';
@@ -144,26 +145,39 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 export const getUserProfile = asyncHandler(async (req, res) => {
-    // Populate friends and game history
-    const user = await User.findById(req.user._id)
-        .populate('friends', 'username avatar elo status')
-        .populate({
-            path: 'gameHistory',
-            populate: {
-                path: 'players.user',
-                select: 'username avatar elo'
-            }
-        })
-        .select("-password -refreshToken");
-
-    if (!user) {
-        throw new ApiError(404, "User not found");
+    const targetUsername = req.query.username;
+    
+    let user;
+    if (targetUsername) {
+        // Fetch public profile for another user
+        user = await User.findOne({ username: new RegExp('^' + targetUsername + '$', 'i') })
+            .populate('friends', 'username avatar elo status')
+            .select("-password -refreshToken -friendRequests");
+            
+        if (!user) {
+            throw new ApiError(404, "User not found");
+        }
+    } else {
+        // Fetch current user's profile
+        user = await User.findById(req.user._id)
+            .populate('friends', 'username avatar elo status')
+            .populate('friendRequests', 'username avatar elo')
+            .select("-password -refreshToken");
     }
 
-    return res.status(200).json(new ApiResponse(200, user, "User profile fetched successfully"));
+    // Fetch games for this user directly from Game collection
+    const games = await Game.find({ 'players.user': user._id })
+        .populate('players.user', 'username avatar elo')
+        .populate('questions', 'title')
+        .sort({ createdAt: -1 });
+
+    const userObj = user.toObject();
+    userObj.gameHistory = games;
+
+    return res.status(200).json(new ApiResponse(200, userObj, "User profile fetched successfully"));
 });
 
-export const addFriend = asyncHandler(async (req, res) => {
+export const sendFriendRequest = asyncHandler(async (req, res) => {
     const { friendUsername } = req.body;
     
     if (!friendUsername) {
@@ -171,7 +185,7 @@ export const addFriend = asyncHandler(async (req, res) => {
     }
 
     if (friendUsername.toLowerCase() === req.user.username.toLowerCase()) {
-        throw new ApiError(400, "You cannot add yourself as a friend");
+        throw new ApiError(400, "You cannot send a friend request to yourself");
     }
 
     const friend = await User.findOne({ username: new RegExp('^' + friendUsername + '$', 'i') });
@@ -186,11 +200,58 @@ export const addFriend = asyncHandler(async (req, res) => {
         throw new ApiError(400, "User is already your friend");
     }
 
-    currentUser.friends.push(friend._id);
+    if (friend.friendRequests.includes(currentUser._id)) {
+        throw new ApiError(400, "Friend request already sent");
+    }
+    
+    if (currentUser.friendRequests.includes(friend._id)) {
+         throw new ApiError(400, "This user has already sent you a request. Check your pending requests.");
+    }
+
+    friend.friendRequests.push(currentUser._id);
+    await friend.save({ validateBeforeSave: false });
+
+    return res.status(200).json(new ApiResponse(200, {}, "Friend request sent successfully"));
+});
+
+export const acceptFriendRequest = asyncHandler(async (req, res) => {
+    const { requesterId } = req.body;
+    
+    if (!requesterId) throw new ApiError(400, "Requester ID is required");
+
+    const currentUser = await User.findById(req.user._id);
+    const requester = await User.findById(requesterId);
+
+    if (!requester) throw new ApiError(404, "Requester not found");
+
+    // Remove from friendRequests
+    currentUser.friendRequests = currentUser.friendRequests.filter(id => id.toString() !== requesterId);
+    
+    // Add to friends for both
+    if (!currentUser.friends.includes(requesterId)) {
+        currentUser.friends.push(requesterId);
+    }
+    if (!requester.friends.includes(currentUser._id)) {
+        requester.friends.push(currentUser._id);
+    }
+
+    await currentUser.save({ validateBeforeSave: false });
+    await requester.save({ validateBeforeSave: false });
+
+    const addedFriend = await User.findById(requesterId).select("username avatar elo status");
+
+    return res.status(200).json(new ApiResponse(200, addedFriend, "Friend request accepted"));
+});
+
+export const rejectFriendRequest = asyncHandler(async (req, res) => {
+    const { requesterId } = req.body;
+    
+    if (!requesterId) throw new ApiError(400, "Requester ID is required");
+
+    const currentUser = await User.findById(req.user._id);
+
+    currentUser.friendRequests = currentUser.friendRequests.filter(id => id.toString() !== requesterId);
     await currentUser.save({ validateBeforeSave: false });
 
-    // Return the newly added friend to update UI immediately
-    const addedFriend = await User.findById(friend._id).select("username avatar elo status");
-
-    return res.status(200).json(new ApiResponse(200, addedFriend, "Friend added successfully"));
+    return res.status(200).json(new ApiResponse(200, {}, "Friend request rejected"));
 });

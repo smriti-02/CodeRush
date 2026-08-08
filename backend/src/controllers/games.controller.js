@@ -18,8 +18,11 @@ export const getArenaData = asyncHandler(async (req, res) => {
         throw new ApiError(400, "No ID provided in the URL");
     }
 
-    // 2. Fetch the game using the clean ID
-    const game = await Game.findOne({ roomId: urlId }).populate('questions');
+    // 2. Fetch the game using the clean ID (check both roomId and _id)
+    let game = await Game.findOne({ roomId: urlId }).populate('questions');
+    if (!game && urlId.match(/^[0-9a-fA-F]{24}$/)) {
+        game = await Game.findById(urlId).populate('questions');
+    }
 
     if (!game) {
         throw new ApiError(404, `Match not found for ID: ${urlId}`);
@@ -85,6 +88,7 @@ export const runCode = asyncHandler(async (req, res) => {
         
         game.eloChange = netEloChange;
         game.finalComplexity = complexity;
+        game.winner = req.user._id; // Set the winner
         game.status = 'Completed'; // Step 3: Capitalized to match schema string validation enum ['Pending', 'Completed', 'Abandoned']
         await game.save();
 

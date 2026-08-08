@@ -235,21 +235,21 @@ const joinQueue = () => {
       {/* 1. TOP NAV */}
       <div className="flex-none h-14 bg-[#0a0a0a] border-b border-neutral-800 flex justify-between items-center px-6">
         <div className="flex items-center gap-8">
-          <h1 className="text-xl font-bold text-[#39d353] font-display tracking-widest uppercase">CodeRush</h1>
+          <h1 onClick={() => navigate('/')} className="text-xl font-bold text-[#39d353] font-display tracking-widest uppercase cursor-pointer">CodeRush</h1>
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-gray-400">
-            <button className="hover:text-white transition-colors flex items-center gap-2">
+            <button onClick={() => navigate('/#hero')} className="hover:text-white transition-colors flex items-center gap-2">
               <Info size={16} /> About Us
             </button>
-            <button className="hover:text-white transition-colors flex items-center gap-2">
+            <button onClick={() => navigate('/#contact')} className="hover:text-white transition-colors flex items-center gap-2">
               <Mail size={16} /> Contact Us
             </button>
-            <button className="hover:text-white transition-colors flex items-center gap-2">
+            <button onClick={() => navigate('/#ai-coach')} className="hover:text-white transition-colors flex items-center gap-2">
               <Cpu size={16} /> AI Coach
             </button>
           </nav>
         </div>
         <div>
-          <button className="hover:text-white text-gray-400 transition-colors flex items-center gap-2 text-sm font-semibold">
+          <button onClick={() => navigate('/profile')} className="hover:text-white text-gray-400 transition-colors flex items-center gap-2 text-sm font-semibold">
             <User size={16} /> Profile
           </button>
         </div>

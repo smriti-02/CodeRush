@@ -7,6 +7,8 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
+    environment:
+      - JUDGE0_URL=http://judge0:2358
     ports:
       - "8000:8000"
     env_file:
@@ -27,8 +29,6 @@ services:
   judge0:
     image: judge0/judge0:1.13.0
     privileged: true
-    volumes:
-      - ./judge0.conf:/judge0.conf:ro
     ports:
       - "2358:2358"
     depends_on:
@@ -40,6 +40,10 @@ services:
       - POSTGRES_USER=judge0
       - POSTGRES_PASSWORD=judge0
       - POSTGRES_DB=judge0
+      - JUDGE0_USE_CGROUPS=false
+      - JUDGE0_RUN_IN_ISOLATED_BOX=false
+      - JUDGE0_SUBMISSION_CACHE_DURATION=0
+      
 
   # 4. Judge0's Memory 
   redis:

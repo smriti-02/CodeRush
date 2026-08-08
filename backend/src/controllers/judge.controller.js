@@ -5,6 +5,7 @@ import { sendToJudge } from "../services/judge.services.js";
 import { calculateMatchResults } from "../utils/scoring.utils.js";
 import { User } from "../models/user.model.js";
 import { Question } from "../models/questions.model.js";
+import { Game } from "../models/game.model.js";
 
 export const executeCode = asyncHandler(async (req, res) => {
     const { questionId, sourceCode, languageId, langSlug, testCases, sessionId } = req.body;
@@ -67,6 +68,32 @@ export const submitCode = asyncHandler(async (req, res) => {
                 complexityMatched: matchResults.complexityMatched,
                 penaltyDeducted: matchResults.penaltyDeducted
             };
+        }
+
+        if (sessionId) {
+            let game = await Game.findOne({ roomId: sessionId });
+            if (!game && sessionId.match(/^[0-9a-fA-F]{24}$/)) {
+                game = await Game.findById(sessionId);
+            }
+            if (game) {
+                const player = game.players.find(p => p.user.toString() === req.user._id.toString());
+                if (player) {
+                    player.submissions.push({
+                        questionId: questionId,
+                        code: sourceCode,
+                        language: langSlug,
+                        status: result.status
+                    });
+                    
+                    if (isWinner && game.status !== 'Completed') {
+                        game.status = 'Completed';
+                        game.winner = req.user._id;
+                        game.eloChange = matchResults.netEloChange;
+                        game.finalComplexity = userComplexity;
+                    }
+                    await game.save();
+                }
+            }
         }
     }
 

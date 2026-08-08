@@ -6,7 +6,9 @@ import {
     logoutUser,
     refreshAccessToken,
     getUserProfile,
-    addFriend
+    sendFriendRequest,
+    acceptFriendRequest,
+    rejectFriendRequest
 } from '../controllers/user.controller.js';
 import { verifyJWT }  from '../middlewares/auth.middleware.js';
 import passport from 'passport';
@@ -54,7 +56,8 @@ router.get("/auth/github/callback",
     }
 );
 router.route("/profile").get(verifyJWT, getUserProfile);
-router.route("/add-friend").post(verifyJWT, addFriend);
-
+router.route("/friend-request").post(verifyJWT, sendFriendRequest);
+router.route("/accept-friend").post(verifyJWT, acceptFriendRequest);
+router.route("/reject-friend").post(verifyJWT, rejectFriendRequest);
 
 export default router;

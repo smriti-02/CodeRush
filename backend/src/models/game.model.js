@@ -20,7 +20,11 @@ const gameSchema = new Schema({
             questionId:{
                 type: Schema.Types.ObjectId,
                 ref: 'Question',
-            }
+            },
+            code: String,
+            language: String,
+            status: String,
+            timestamp: { type: Date, default: Date.now }
         }]
     }],
     status: {

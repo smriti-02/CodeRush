@@ -280,6 +280,7 @@ void printResult(const vector<int>& val);
 void printResult(const vector<string>& val);
 void printResult(const vector<vector<int>>& val);
 void printResult(const vector<vector<string>>& val);
+void printResult(const vector<bool>& val);
 
 void printResult(int val) { cout << val; }
 void printResult(long long val) { cout << val; }
@@ -315,6 +316,14 @@ void printResult(const vector<vector<string>>& val) {
     for(size_t i=0; i<val.size(); i++) {
         printResult(val[i]);
         if(i != val.size()-1) cout << ",";
+    }
+    cout << "]";
+}
+void printResult(const vector<bool>& val) {
+    cout << "[";
+    for (size_t i = 0; i < val.size(); i++) {
+        printResult((bool)val[i]);
+        if (i != val.size() - 1) cout << ",";
     }
     cout << "]";
 }

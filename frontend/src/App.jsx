@@ -6,6 +6,7 @@ import Dashboard from './pages/dashboard';
 import Arena from './pages/Arena';
 import CodeRushHero from './pages/CodeRushHero';
 import Profile from './pages/Profile';
+import Practice from './pages/Practice';
 
 function App() {
   return (
@@ -19,6 +20,8 @@ function App() {
         <Route path="/CodeRushHero" element={<CodeRushHero />} />
         <Route path="/arena/:gameId" element={<Arena />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/profile/:usernameParam" element={<Profile />} />
+        <Route path="/practice/:gameId" element={<Practice />} />
       </Routes>
     </BrowserRouter>
   );

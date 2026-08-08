@@ -6,6 +6,7 @@ import "./config/passport.js";
 import helmet from 'helmet';
 import gameRouter from "./routes/game.routes.js";
 import judgeRouter from "./routes/judge.routes.js";
+import aiRouter from "./routes/ai.routes.js";
 
 
 const app = express();
@@ -85,6 +86,7 @@ app.use(cookieParser());
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/games", gameRouter);
 app.use("/api/v1/judge", judgeRouter);
+app.use("/api/v1/ai", aiRouter);
 
 
 
