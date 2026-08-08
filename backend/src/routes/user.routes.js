@@ -32,7 +32,7 @@ router.get("/auth/google/callback",
     async (req, res) => {
         const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(req.user._id);
         
-        const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production' };
+        const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' };
 
         res.cookie("accessToken", accessToken, options)
            .cookie("refreshToken", refreshToken, options)
@@ -48,7 +48,7 @@ router.get("/auth/github/callback",
     async (req, res) => {
         const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(req.user._id);
         
-        const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production' };
+        const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' };
 
         res.cookie("accessToken", accessToken, options)
            .cookie("refreshToken", refreshToken, options)
