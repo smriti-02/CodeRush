@@ -1,7 +1,29 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { X, Bot } from 'lucide-react';
+
+const LoadingText = () => {
+  const [textIndex, setTextIndex] = useState(0);
+  const texts = [
+    "Sending games to AI...",
+    "Nemotron is reading your code...",
+    "Analyzing time and space complexity...",
+    "Finding weaknesses in your approach...",
+    "Generating actionable feedback...",
+    "Formatting markdown...",
+    "Almost there..."
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTextIndex((prev) => (prev + 1) % texts.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [texts.length]);
+
+  return <p className="font-mono text-sm animate-pulse">{texts[textIndex]}</p>;
+};
 
 export default function AIReviewModal({ isOpen, onClose, title, content, loading }) {
   if (!isOpen) return null;
@@ -29,7 +51,7 @@ export default function AIReviewModal({ isOpen, onClose, title, content, loading
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4 py-12">
               <Bot className="animate-bounce text-[#39d353]" size={48} />
-              <p className="font-mono text-sm animate-pulse">Nemotron is analyzing...</p>
+              <LoadingText />
             </div>
           ) : (
             <div className="prose prose-invert prose-pre:bg-[#161616] prose-pre:border prose-pre:border-neutral-800 max-w-none text-gray-300">

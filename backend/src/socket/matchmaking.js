@@ -1,4 +1,5 @@
 import { waitingQueue, playingPlayers, activeGames, pendingMatches, onlinePlayers, broadcastStats } from './state.js';
+import { User } from '../models/user.model.js';
 import { Question } from '../models/questions.model.js';
 import { Game } from '../models/game.model.js';
 import crypto from "crypto";
@@ -6,14 +7,142 @@ import crypto from "crypto";
 const difficultyRank = { easy: 1, medium: 2, hard: 3 };
 const getLowerDifficulty = (d1, d2) => difficultyRank[d1] <= difficultyRank[d2] ? d1 : d2;
 
+const getOrCreateBotUser = async () => {
+    let botUser = await User.findOne({ username: 'CodeRush_Bot' });
+    if (!botUser) {
+        botUser = await User.create({
+            username: 'CodeRush_Bot',
+            email: 'bot@coderush.com',
+            password: crypto.randomBytes(16).toString("hex"), 
+            elo: 1500
+        });
+    }
+    return botUser;
+};
+
 const startBotMatch = async (io, player) => {
-    const selectedTopic = player.topics[0] || 'Arrays';
-    
-    io.to(player.socketId).emit("matchFound", { 
-        gameId: `bot_game_${Date.now()}`, 
-        message: "Queue timeout. Matching with Bot...", 
-        matchConfig: { topic: selectedTopic, timeLimit: player.timeLimit, difficulty: player.difficulty, isBot: true } 
-    });
+    try {
+        const botUser = await getOrCreateBotUser();
+        
+        const selectedTopic = player.topics[0] || 'Arrays';
+        const formattedDifficulty = player.difficulty.charAt(0).toUpperCase() + player.difficulty.slice(1);
+        
+        const randomQuestions = await Question.aggregate([
+            {
+                $match: {
+                    difficulty: formattedDifficulty,
+                    "topicTags.name": new RegExp(selectedTopic, 'i'),
+                    allTestCases: { $exists: true, $type: 'array', $ne: [] }
+                }
+            },
+            { $sample: { size: 1 } }
+        ]);
+
+        const selectedQuestion = randomQuestions.length > 0 ? randomQuestions[0] : await Question.findOne(); 
+        
+        if (!selectedQuestion) {
+            io.to(player.socketId).emit("matchEnded", { reason: "Server Error: No questions available." });
+            return; 
+        }
+
+        const gameRoomId = crypto.randomBytes(8).toString("hex");
+
+        await Game.create({
+            roomId: gameRoomId,
+            players: [
+                { user: player.userId, socketId: player.socketId, status: 'connected' },
+                { user: botUser._id, socketId: 'bot_socket_id', status: 'connected' }
+            ],
+            questions: [selectedQuestion._id],
+            settings: { duration: player.timeLimit, mode: 'classic' },
+            status: 'Pending'
+        });
+
+        const p1Socket = io.sockets.sockets.get(player.socketId);
+        if (p1Socket) p1Socket.join(gameRoomId);
+
+        playingPlayers.add(player.userId);
+
+        const durationSeconds = player.timeLimit * 60;
+        
+        // Calculate dynamic bot solve time based on difficulty and time limit
+        // Easy: 20-40% of time limit
+        // Medium: 40-70% of time limit
+        // Hard: 70-95% of time limit
+        const diffMultiplier = formattedDifficulty === 'Easy' ? { min: 0.2, max: 0.4 } :
+                               formattedDifficulty === 'Medium' ? { min: 0.4, max: 0.7 } :
+                               { min: 0.7, max: 0.95 };
+        
+        const solveTimeRatio = Math.random() * (diffMultiplier.max - diffMultiplier.min) + diffMultiplier.min;
+        const botSolveTimeSeconds = Math.floor(durationSeconds * solveTimeRatio);
+        
+        activeGames.set(gameRoomId, {
+            timeLeft: durationSeconds,
+            botSolveTime: durationSeconds - botSolveTimeSeconds, // The timeLeft when bot solves it
+            botStatusTimer: 0,
+            isBotMatch: true,
+            players: {
+                [player.userId]: { socketId: player.socketId, status: 'connected' },
+                [botUser._id.toString()]: { socketId: 'bot_socket_id', status: 'connected', isBot: true }
+            },
+            disconnectTimers: {},
+            interval: setInterval(() => {
+                const game = activeGames.get(gameRoomId);
+                if (!game) return;
+                
+                game.timeLeft--;
+                io.to(gameRoomId).emit("timerUpdate", { timeLeft: game.timeLeft });
+                
+                // Simulate Bot activity
+                if (game.isBotMatch && game.timeLeft > game.botSolveTime) {
+                    game.botStatusTimer++;
+                    if (game.botStatusTimer > 15) { // update status every ~15 seconds
+                        game.botStatusTimer = 0;
+                        const statuses = ["Typing...", "Compiling...", "Idle", "Thinking...", "Reading Question..."];
+                        const status = statuses[Math.floor(Math.random() * statuses.length)];
+                        // Broadcast only to the player, which is essentially the room since bot has fake socket
+                        io.to(gameRoomId).emit('opponentStatusUpdate', { status });
+                    }
+                }
+                
+                // Bot wins!
+                if (game.isBotMatch && game.timeLeft <= game.botSolveTime && game.botSolveTime > 0) {
+                    game.botSolveTime = 0; // trigger only once
+                    io.to(gameRoomId).emit('opponentStatusUpdate', { status: "Finished!" });
+                    
+                    Game.findOne({ roomId: gameRoomId }).then(gameDoc => {
+                        if (gameDoc && gameDoc.status !== 'Completed') {
+                            gameDoc.status = 'Completed';
+                            gameDoc.winner = botUser._id;
+                            gameDoc.eloChange = 10;
+                            gameDoc.save();
+                        }
+                    });
+                    
+                    io.to(gameRoomId).emit("matchEnded", { reason: 'opponent_finished' });
+                    clearInterval(game.interval);
+                    activeGames.delete(gameRoomId);
+                    return;
+                }
+                
+                if (game.timeLeft <= 0) {
+                    clearInterval(game.interval);
+                    io.to(gameRoomId).emit("matchEnded", { reason: 'timeout' });
+                    activeGames.delete(gameRoomId);
+                }
+            }, 1000)
+        });
+
+        io.to(player.socketId).emit("matchFound", { 
+            gameId: gameRoomId, 
+            message: "Queue timeout. Matching with Bot...", 
+            matchConfig: { topic: selectedTopic, timeLimit: player.timeLimit, difficulty: player.difficulty, isBot: true } 
+        });
+        
+        broadcastStats(io);
+    } catch (err) {
+        console.error("Error starting bot match:", err);
+    }
 };
 
 export const startGame = async (io, player1, player2, matchConfig) => {
@@ -180,7 +309,7 @@ export const startIdleFallbackLoop = (io) => {
                 const p1 = waitingQueue[i];
                 const waited = now - p1.joinedAt;
 
-                if (waited >= 300000) {
+                if (waited >= 5000) {
                     waitingQueue.splice(i, 1);
                     startBotMatch(io, p1);
                     i--;

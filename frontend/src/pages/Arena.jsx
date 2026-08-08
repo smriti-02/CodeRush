@@ -31,6 +31,7 @@ export default function Arena() {
   const [execResult, setExecResult] = useState(null);
   const [wrongSubmissions, setWrongSubmissions] = useState(0);
   const [matchResult, setMatchResult] = useState(null);
+  const [isExecuting, setIsExecuting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -88,6 +89,7 @@ export default function Arena() {
   };
 
   const handleRunCode = async () => {
+    setIsExecuting(true);
     socket.emit('playerStatusUpdate', { gameId, status: "Compiling..." });
     const currentLangId = ALLOWED_LANGUAGES[language]?.id || 62;
 
@@ -108,10 +110,13 @@ export default function Arena() {
         console.error("Execution crashed:", error);
         setExecResult({ status: 'Error', stdout: '', stderr: error.response?.data?.message || error.message || 'Error executing code' });
         socket.emit('playerStatusUpdate', { gameId, status: "Error" });
+    } finally {
+        setIsExecuting(false);
     }
   };
 
   const handleSubmitCode = async () => {
+    setIsExecuting(true);
     socket.emit('playerStatusUpdate', { gameId, status: "Submitting..." });
     const currentLangId = ALLOWED_LANGUAGES[language]?.id || 62;
 
@@ -143,6 +148,8 @@ export default function Arena() {
         console.error("Submission crashed:", error);
         setExecResult({ status: 'Error', stdout: '', stderr: error.response?.data?.message || error.message || 'Error executing code' });
         socket.emit('playerStatusUpdate', { gameId, status: "Error" });
+    } finally {
+        setIsExecuting(false);
     }
   };
 
@@ -242,15 +249,17 @@ export default function Arena() {
                     <div className="flex items-center gap-3">
                       <button 
                           onClick={handleRunCode} 
-                          className="bg-[#1a1a1a] border border-neutral-700 text-gray-300 px-4 py-1.5 rounded-lg text-xs font-bold font-mono hover:bg-[#222] hover:text-white hover:border-neutral-500 transition-all"
+                          disabled={isExecuting}
+                          className="bg-[#1a1a1a] border border-neutral-700 text-gray-300 px-4 py-1.5 rounded-lg text-xs font-bold font-mono hover:bg-[#222] hover:text-white hover:border-neutral-500 transition-all disabled:opacity-50"
                       >
-                          Run
+                          {isExecuting ? 'Running...' : 'Run'}
                       </button>
                       <button 
                           onClick={handleSubmitCode} 
-                          className="bg-[#39d353] text-black px-4 py-1.5 rounded-lg text-xs font-bold font-mono hover:bg-white hover:scale-105 transition-all shadow-[0_0_15px_rgba(57,211,83,0.3)]"
+                          disabled={isExecuting}
+                          className="bg-[#39d353] text-black px-4 py-1.5 rounded-lg text-xs font-bold font-mono hover:bg-white hover:scale-105 transition-all shadow-[0_0_15px_rgba(57,211,83,0.3)] disabled:opacity-50 disabled:hover:scale-100"
                       >
-                        Submit
+                        {isExecuting ? 'Submitting...' : 'Submit'}
                       </button>
                     </div>
                   </div>
@@ -293,8 +302,15 @@ export default function Arena() {
               <Panel id="console" order={2} defaultSize={35} minSize={20}>
                 <div className="h-full p-6 bg-[#111111] overflow-auto rounded-br-xl custom-scrollbar">
                   <h3 className="text-xs font-bold font-mono text-gray-500 uppercase tracking-widest mb-4">Execution Result</h3>
-                  {!execResult && <p className="text-sm font-mono text-neutral-600 italic">No execution yet. Run your code to see outputs.</p>}
-                  {execResult && (
+                  {isExecuting ? (
+                    <div className="flex flex-col items-center justify-center h-48 space-y-4 text-gray-400">
+                      <div className="w-8 h-8 border-4 border-[#39d353] border-t-transparent rounded-full animate-spin"></div>
+                      <p className="font-mono text-sm animate-pulse">Executing code in secure sandbox...</p>
+                      <p className="font-mono text-xs text-gray-500">ETA: ~5s depending on server load</p>
+                    </div>
+                  ) : !execResult ? (
+                    <p className="text-sm font-mono text-neutral-600 italic">No execution yet. Run your code to see outputs.</p>
+                  ) : (
                     <div className="text-sm font-mono text-gray-300">
                       <div className="mb-4">
                         <strong className="text-gray-500 block mb-1 text-[10px] uppercase tracking-wider">Status</strong> 

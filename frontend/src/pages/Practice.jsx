@@ -227,8 +227,15 @@ export default function Practice() {
               <Panel id="console" order={2} defaultSize={35} minSize={20}>
                 <div className="h-full p-6 bg-[#111111] overflow-auto rounded-br-xl custom-scrollbar">
                   <h3 className="text-xs font-bold font-mono text-gray-500 uppercase tracking-widest mb-4">Execution Result</h3>
-                  {!execResult && <p className="text-sm font-mono text-neutral-600 italic">No execution yet. Run your code to see outputs.</p>}
-                  {execResult && (
+                  {isExecuting ? (
+                    <div className="flex flex-col items-center justify-center h-48 space-y-4 text-gray-400">
+                      <div className="w-8 h-8 border-4 border-[#39d353] border-t-transparent rounded-full animate-spin"></div>
+                      <p className="font-mono text-sm animate-pulse">Executing code in secure sandbox...</p>
+                      <p className="font-mono text-xs text-gray-500">ETA: ~5s depending on server load</p>
+                    </div>
+                  ) : !execResult ? (
+                    <p className="text-sm font-mono text-neutral-600 italic">No execution yet. Run your code to see outputs.</p>
+                  ) : (
                     <div className="text-sm font-mono text-gray-300">
                       <div className="mb-4">
                         <strong className="text-gray-500 block mb-1 text-[10px] uppercase tracking-wider">Status</strong> 
