@@ -38,8 +38,24 @@ export const submitCode = asyncHandler(async (req, res) => {
     
     // Evaluate ELO if it's a real user session
     let eloData = null;
+    let game = null;
+    
     if (req.user) {
-        const isWinner = result.status === "Accepted";
+        if (sessionId) {
+            game = await Game.findOne({ roomId: sessionId });
+            if (!game && sessionId.match(/^[0-9a-fA-F]{24}$/)) {
+                game = await Game.findById(sessionId);
+            }
+        }
+
+        let isWinner = result.status === "Accepted";
+        let finishedSecond = false;
+        
+        if (isWinner && game && game.status === 'Completed' && game.winner && game.winner.toString() !== req.user._id.toString()) {
+            isWinner = false;
+            finishedSecond = true;
+        }
+        
         const matchData = {
             isWinner,
             isDraw: false,
@@ -66,16 +82,12 @@ export const submitCode = asyncHandler(async (req, res) => {
                 netEloChange: matchResults.netEloChange,
                 newElo: user.elo,
                 complexityMatched: matchResults.complexityMatched,
-                penaltyDeducted: matchResults.penaltyDeducted
+                penaltyDeducted: matchResults.penaltyDeducted,
+                finishedSecond
             };
         }
 
-        if (sessionId) {
-            let game = await Game.findOne({ roomId: sessionId });
-            if (!game && sessionId.match(/^[0-9a-fA-F]{24}$/)) {
-                game = await Game.findById(sessionId);
-            }
-            if (game) {
+        if (game) {
                 const player = game.players.find(p => p.user.toString() === req.user._id.toString());
                 if (player) {
                     player.submissions.push({
@@ -94,7 +106,6 @@ export const submitCode = asyncHandler(async (req, res) => {
                     await game.save();
                 }
             }
-        }
     }
 
     return res.status(200).json(

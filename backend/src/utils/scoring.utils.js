@@ -6,7 +6,7 @@ const WEIGHTS = {
     'O(n^2)': 1
 };
 
-const DIFFICULTY_STAKES = {
+export const DIFFICULTY_STAKES = {
     'Easy': { floor: -100, eloPenalty: 100 },
     'Medium': { floor: -300, eloPenalty: 150 },
     'Hard': { floor: -500, eloPenalty: 200 }

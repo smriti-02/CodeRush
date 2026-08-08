@@ -16,8 +16,12 @@ import {
   Target,
   Settings2,
   Terminal,
-  Code2
+  Code2,
+  Trophy,
+  Users,
+  ChevronRight
 } from "lucide-react";
+import axiosInstance from '../api/axios';
 
 const AVAILABLE_TOPICS = [
   "Array", "String", "Math", "Hash Table",
@@ -63,6 +67,20 @@ export default function Dashboard() {
     localStorage.setItem('cr_difficulty', JSON.stringify(difficulty));
     localStorage.setItem('cr_strictMode', JSON.stringify(strictMode));
   }, [selectedTopics, timeLimit, difficulty, strictMode]);
+
+  const [userProfile, setUserProfile] = useState(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await axiosInstance.get('/users/profile');
+        setUserProfile(res.data.data);
+      } catch (err) {
+        console.error("Failed to fetch profile:", err);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   // Socket & Matchmaking State
   const [playerStats, setPlayerStats] = useState({ online: 0, playing: 0, inQueue: 0 });
@@ -235,22 +253,22 @@ const joinQueue = () => {
       {/* 1. TOP NAV */}
       <div className="flex-none h-14 bg-[#0a0a0a] border-b border-neutral-800 flex justify-between items-center px-6">
         <div className="flex items-center gap-8">
-          <h1 onClick={() => navigate('/')} className="text-xl font-bold text-[#39d353] font-display tracking-widest uppercase cursor-pointer">CodeRush</h1>
+          <h1 onClick={() => navigate('/')} className="text-xl font-bold text-[#39d353] font-display tracking-widest uppercase cursor-pointer hover:scale-105 transition-transform duration-300">CodeRush</h1>
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-gray-400">
-            <button onClick={() => navigate('/#hero')} className="hover:text-white transition-colors flex items-center gap-2">
+            <button onClick={() => navigate('/#hero')} className="hover:text-white hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2">
               <Info size={16} /> About Us
             </button>
-            <button onClick={() => navigate('/#contact')} className="hover:text-white transition-colors flex items-center gap-2">
+            <button onClick={() => navigate('/#contact')} className="hover:text-white hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2">
               <Mail size={16} /> Contact Us
             </button>
-            <button onClick={() => navigate('/#ai-coach')} className="hover:text-white transition-colors flex items-center gap-2">
+            <button onClick={() => navigate('/#ai-coach')} className="hover:text-white hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2">
               <Cpu size={16} /> AI Coach
             </button>
           </nav>
         </div>
         <div>
-          <button onClick={() => navigate('/profile')} className="hover:text-white text-gray-400 transition-colors flex items-center gap-2 text-sm font-semibold">
-            <User size={16} /> Profile
+          <button onClick={() => navigate('/profile')} className="hover:text-[#39d353] text-gray-400 hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2 text-sm font-semibold">
+            <User size={16} /> {userProfile?.username || 'Profile'}
           </button>
         </div>
       </div>
@@ -352,6 +370,37 @@ const joinQueue = () => {
                     Strict Match (Wait for exact preferences)
                   </label>
                 </div>
+                
+                {/* Profile Summary Widget */}
+                {userProfile && (
+                  <div 
+                    onClick={() => navigate('/profile')}
+                    className="mt-6 bg-[#111] border border-neutral-800 rounded-xl p-4 cursor-pointer hover:border-[#39d353]/50 hover:bg-[#1a1a1a] transition-all group relative overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#39d353]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="flex justify-between items-center relative z-10">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-white tracking-wide">{userProfile.username}</span>
+                          <span className="text-[10px] bg-[#39d353]/20 text-[#39d353] px-2 py-0.5 rounded-full font-mono border border-[#39d353]/30">
+                            {userProfile.elo} ELO
+                          </span>
+                        </div>
+                        <div className="flex gap-4 text-xs font-mono text-gray-400 mt-2">
+                          <span className="flex items-center gap-1.5">
+                            <Trophy size={12} className="text-yellow-500" />
+                            {userProfile.stats?.wins || 0} Wins
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <Users size={12} className="text-blue-400" />
+                            {userProfile.friends?.length || 0} Friends
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="text-gray-600 group-hover:text-[#39d353] group-hover:translate-x-1 transition-all" size={20} />
+                    </div>
+                  </div>
+                )}
 
               </div>
 

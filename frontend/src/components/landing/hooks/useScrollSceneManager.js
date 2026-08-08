@@ -9,20 +9,20 @@ export const useScrollSceneManager = (scrollYProgress) => {
     const p = scrollYProgress.get();
     
     // Smooth transitions
-    // Section 1 (Gun): 0.0 -> 0.15
-    // Transition 1: 0.15 -> 0.35
-    // Section 2 (Trophy): 0.35 -> 0.65
-    // Transition 2: 0.65 -> 0.85
-    // Section 3 (Robot): 0.85 -> 1.0
+    // Section 1 (Gun): 0.0 -> 0.10
+    // Transition 1: 0.10 -> 0.45
+    // Section 2 (Trophy): 0.45 -> 0.55
+    // Transition 2: 0.55 -> 0.90
+    // Section 3 (Robot): 0.90 -> 1.0
 
-    if (p < 0.15) {
+    if (p < 0.10) {
       return 0;
-    } else if (p < 0.35) {
-      return (p - 0.15) / 0.20; // 0 to 1
-    } else if (p < 0.65) {
+    } else if (p < 0.45) {
+      return (p - 0.10) / 0.35; // 0 to 1
+    } else if (p < 0.55) {
       return 1;
-    } else if (p < 0.85) {
-      return 1 + (p - 0.65) / 0.20; // 1 to 2
+    } else if (p < 0.90) {
+      return 1 + (p - 0.55) / 0.35; // 1 to 2
     } else {
       return 2;
     }

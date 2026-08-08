@@ -127,7 +127,7 @@ export default function Practice() {
           
           <Panel id="problem-panel" order={1} defaultSize={45} minSize={30}>
             <div className="h-full overflow-y-auto p-6 bg-[#0a0a0a] custom-scrollbar">
-              <div className="prose prose-invert prose-pre:bg-[#111111] prose-pre:border prose-pre:border-neutral-800 max-w-none flex-grow">
+              <div className="prose prose-invert prose-pre:bg-[#111111] prose-pre:border prose-pre:border-neutral-800 max-w-none flex-grow min-w-0 break-words overflow-x-hidden">
                 <h1 className="text-3xl font-display font-bold text-white mb-4 leading-tight">{questionData.title}</h1>
                 
                 <div className="flex flex-wrap gap-2 mb-8">

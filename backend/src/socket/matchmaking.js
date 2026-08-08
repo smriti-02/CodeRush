@@ -2,6 +2,7 @@ import { waitingQueue, playingPlayers, activeGames, pendingMatches, onlinePlayer
 import { User } from '../models/user.model.js';
 import { Question } from '../models/questions.model.js';
 import { Game } from '../models/game.model.js';
+import { DIFFICULTY_STAKES } from '../utils/scoring.utils.js';
 import crypto from "crypto";
 
 const difficultyRank = { easy: 1, medium: 2, hard: 3 };
@@ -65,13 +66,9 @@ const startBotMatch = async (io, player) => {
 
         const durationSeconds = player.timeLimit * 60;
         
-        // Calculate dynamic bot solve time based on difficulty and time limit
-        // Easy: 20-40% of time limit
-        // Medium: 40-70% of time limit
-        // Hard: 70-95% of time limit
-        const diffMultiplier = formattedDifficulty === 'Easy' ? { min: 0.2, max: 0.4 } :
-                               formattedDifficulty === 'Medium' ? { min: 0.4, max: 0.7 } :
-                               { min: 0.7, max: 0.95 };
+        // Calculate bot solve time to always fall within the last 40% of the total time limit
+        // (i.e. if 10 mins, bot finishes between 6 to 9.5 mins)
+        const diffMultiplier = { min: 0.60, max: 0.95 };
         
         const solveTimeRatio = Math.random() * (diffMultiplier.max - diffMultiplier.min) + diffMultiplier.min;
         const botSolveTimeSeconds = Math.floor(durationSeconds * solveTimeRatio);
@@ -114,19 +111,34 @@ const startBotMatch = async (io, player) => {
                         if (gameDoc && gameDoc.status !== 'Completed') {
                             gameDoc.status = 'Completed';
                             gameDoc.winner = botUser._id;
-                            gameDoc.eloChange = 10;
                             gameDoc.save();
                         }
                     });
-                    
-                    io.to(gameRoomId).emit("matchEnded", { reason: 'opponent_finished' });
-                    clearInterval(game.interval);
-                    activeGames.delete(gameRoomId);
-                    return;
                 }
                 
                 if (game.timeLeft <= 0) {
                     clearInterval(game.interval);
+                    
+                    Game.findOne({ roomId: gameRoomId }).then(async gameDoc => {
+                        if (gameDoc) {
+                            if (gameDoc.status !== 'Completed') {
+                                gameDoc.status = 'Completed';
+                            }
+                            
+                            // Apply timeout/loss penalty to human if they didn't win
+                            // Check if judge already gave them an Elo change for finishing second
+                            const humanPlayer = gameDoc.players.find(p => p.user.toString() === player.userId.toString());
+                            const hasAccepted = humanPlayer?.submissions?.some(sub => sub.status === "Accepted");
+                            
+                            if (!hasAccepted) {
+                                const penalty = DIFFICULTY_STAKES[formattedDifficulty]?.floor || -100;
+                                await User.findByIdAndUpdate(player.userId, { $inc: { elo: penalty } });
+                                gameDoc.eloChange = penalty;
+                                await gameDoc.save();
+                            }
+                        }
+                    });
+                    
                     io.to(gameRoomId).emit("matchEnded", { reason: 'timeout' });
                     activeGames.delete(gameRoomId);
                 }
@@ -210,6 +222,31 @@ export const startGame = async (io, player1, player2, matchConfig) => {
                 
                 if (game.timeLeft <= 0) {
                     clearInterval(game.interval);
+                    
+                    Game.findOne({ roomId: gameRoomId }).then(async gameDoc => {
+                        if (gameDoc) {
+                            if (gameDoc.status !== 'Completed') {
+                                gameDoc.status = 'Completed';
+                            }
+                            
+                            const penalty = DIFFICULTY_STAKES[formattedDifficulty]?.floor || -100;
+                            let eloChanged = false;
+                            
+                            for (const p of gameDoc.players) {
+                                const hasAccepted = p.submissions?.some(sub => sub.status === "Accepted");
+                                if (!hasAccepted && p.user) {
+                                    await User.findByIdAndUpdate(p.user, { $inc: { elo: penalty } });
+                                    eloChanged = true;
+                                }
+                            }
+                            
+                            if (eloChanged) {
+                                gameDoc.eloChange = penalty;
+                                await gameDoc.save();
+                            }
+                        }
+                    });
+                    
                     io.to(gameRoomId).emit("matchEnded", { reason: 'timeout' });
                     activeGames.delete(gameRoomId);
                 }
@@ -309,7 +346,7 @@ export const startIdleFallbackLoop = (io) => {
                 const p1 = waitingQueue[i];
                 const waited = now - p1.joinedAt;
 
-                if (waited >= 5000) {
+                if (waited >= 300000) { // 5 minutes
                     waitingQueue.splice(i, 1);
                     startBotMatch(io, p1);
                     i--;

@@ -23,22 +23,6 @@ export const HeroSection = ({ onOpenAuth }) => {
         <a href="/" className="text-2xl font-display font-bold tracking-tighter text-[#39d353] hover:text-white transition-colors cursor-pointer">
           &lt;CODERUSH/&gt;
         </a>
-        <div className="hidden md:flex space-x-8 text-sm font-medium font-mono tracking-wide text-gray-400">
-          <a href="/" className="hover:text-white transition-colors">HOME</a>
-          <a href="#hero" className="hover:text-white transition-colors">BATTLES</a>
-          <a href="#leaderboard" className="hover:text-white transition-colors">LEADERBOARD</a>
-          <a href="#ai-coach" className="hover:text-white transition-colors">AI COACH</a>
-          <a href="#contact" className="hover:text-white transition-colors">CONTACT</a>
-        </div>
-        <div className="flex items-center space-x-3 bg-[#111111]/80 border border-neutral-800 px-4 py-2 rounded-full cursor-pointer hover:border-[#39d353] transition-colors backdrop-blur-md">
-          <div className="w-6 h-6 bg-[#39d353] rounded-full flex items-center justify-center text-xs font-bold text-black font-mono">
-            H
-          </div>
-          <div className="flex flex-col text-xs font-mono">
-            <span className="font-semibold text-white">Harsh Paryani</span>
-            <span className="text-[#39d353] flex items-center gap-1">★ 1560</span>
-          </div>
-        </div>
       </nav>
 
       <main className="relative flex-1 w-full max-w-7xl mx-auto px-6 flex flex-col justify-center pointer-events-none">

@@ -71,7 +71,13 @@ export default function Arena() {
     socket.on('timerUpdate', ({ timeLeft }) => setTimeLeft(timeLeft));
     socket.on('opponentStatusUpdate', ({ status }) => setOpponentStatus(status));
     socket.on('matchEnded', ({ reason }) => {
-      setMatchResult({ status: 'lost', reason });
+      if (reason === 'opponent_forfeited') {
+        setMatchResult({ status: 'won', reason: 'Opponent surrendered.' });
+      } else if (reason === 'timeout') {
+        setMatchResult({ status: 'lost', reason: "Time's up! Max Elo penalty applied." });
+      } else {
+        setMatchResult({ status: 'lost', reason });
+      }
     });
 
     return () => {
@@ -139,7 +145,11 @@ export default function Arena() {
         
         if (result?.status === "Accepted") {
             socket.emit('playerStatusUpdate', { gameId, status: "Finished!" });
-            setMatchResult({ status: 'won', eloData });
+            if (eloData?.finishedSecond) {
+                setMatchResult({ status: 'lost', reason: 'You solved it, but your opponent was faster!', eloData });
+            } else {
+                setMatchResult({ status: 'won', eloData });
+            }
         } else {
             setWrongSubmissions(prev => prev + 1);
             socket.emit('playerStatusUpdate', { gameId, status: "Wrong Answer" });
@@ -163,9 +173,21 @@ export default function Arena() {
       {/* Top Header Placeholder (if needed, otherwise we integrate deeply) */}
       <div className="flex-none h-14 bg-[#111111] border-b border-neutral-800 flex justify-between items-center px-6">
         <h2 className="text-lg font-bold text-[#39d353] font-display tracking-wide uppercase">Match Arena</h2>
-        <span className="text-xs font-mono bg-[#1a1a1a] px-3 py-1.5 rounded-lg border border-neutral-800 text-gray-400 shadow-inner">
-          ID: {gameId.split('_')[1] || gameId}
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-xs font-mono bg-[#1a1a1a] px-3 py-1.5 rounded-lg border border-neutral-800 text-gray-400 shadow-inner">
+            ID: {gameId.split('_')[1] || gameId}
+          </span>
+          <button 
+            onClick={() => {
+              if (window.confirm("Are you sure you want to forfeit this match? You will lose Elo.")) {
+                socket.emit('forfeitMatch', { gameId });
+              }
+            }}
+            className="text-xs font-bold font-mono bg-red-500/10 text-red-500 border border-red-500/30 px-3 py-1.5 rounded-lg hover:bg-red-500 hover:text-white transition-colors"
+          >
+            Forfeit
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden p-2">
@@ -192,7 +214,7 @@ export default function Arena() {
               </div>
 
               {/* Question Rendering */}
-              <div className="prose prose-invert prose-pre:bg-[#111111] prose-pre:border prose-pre:border-neutral-800 max-w-none flex-grow">
+              <div className="prose prose-invert prose-pre:bg-[#111111] prose-pre:border prose-pre:border-neutral-800 max-w-none flex-grow min-w-0 break-words overflow-x-hidden">
                 <h1 className="text-3xl font-display font-bold text-white mb-4 leading-tight">{questionData.title}</h1>
                 
                 <div className="flex flex-wrap gap-2 mb-8">
@@ -372,7 +394,7 @@ export default function Arena() {
               <h2 className={`text-4xl font-black tracking-widest uppercase ${matchResult.status === 'won' ? 'text-[#39d353] drop-shadow-[0_0_10px_rgba(57,211,83,0.3)]' : 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.3)]'}`}>
                 {matchResult.status === 'won' ? 'VICTORY' : 'DEFEAT'}
               </h2>
-              {matchResult.status === 'lost' && (
+              {matchResult.reason && (
                 <p className="text-gray-400 mt-2 font-mono text-sm text-center">{matchResult.reason}</p>
               )}
             </div>
