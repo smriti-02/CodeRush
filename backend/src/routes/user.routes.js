@@ -36,7 +36,7 @@ router.get("/auth/google/callback",
 
         res.cookie("accessToken", accessToken, options)
            .cookie("refreshToken", refreshToken, options)
-           .redirect(`${process.env.FRONTEND_URL}/dashboard`); // Redirect to your frontend
+           .redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`); // Redirect to your frontend
     }
 );
 
@@ -52,7 +52,7 @@ router.get("/auth/github/callback",
 
         res.cookie("accessToken", accessToken, options)
            .cookie("refreshToken", refreshToken, options)
-           .redirect(`${process.env.FRONTEND_URL}/dashboard`); // Redirect to your frontend
+           .redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`); // Redirect to your frontend
     }
 );
 router.route("/profile").get(verifyJWT, getUserProfile);
