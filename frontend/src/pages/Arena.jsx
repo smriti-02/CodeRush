@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { socket } from '../api/socket'; 
@@ -34,6 +34,44 @@ export default function Arena() {
   const [isExecuting, setIsExecuting] = useState(false);
   const navigate = useNavigate();
 
+  // Anti-Cheat Refs
+  const lastCopiedText = useRef("");
+  const lastValidPasteTime = useRef(0);
+  const prevCodeLength = useRef(0);
+  const isFlagged = useRef(false);
+
+  // Anti-Cheat Copy/Paste Listeners
+  useEffect(() => {
+    const handleCopy = (e) => {
+      const selectedText = window.getSelection().toString();
+      if (selectedText) {
+        lastCopiedText.current = selectedText;
+      }
+    };
+
+    const handlePaste = (e) => {
+      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+      if (!pastedText) return;
+      
+      const internalText = lastCopiedText.current;
+      
+      if (pastedText.trim() !== internalText.trim()) {
+        e.preventDefault();
+        alert("Anti-Cheat: Pasting external code (like ChatGPT) is disabled!");
+      } else {
+        lastValidPasteTime.current = Date.now();
+      }
+    };
+
+    window.addEventListener('copy', handleCopy);
+    window.addEventListener('paste', handlePaste, true); // capture phase
+
+    return () => {
+      window.removeEventListener('copy', handleCopy);
+      window.removeEventListener('paste', handlePaste, true);
+    };
+  }, []);
+
   useEffect(() => {
     const fetchArenaData = async () => {
       try {
@@ -55,6 +93,7 @@ export default function Arena() {
         const defaultSnippet = question.codeSnippets.find(s => ALLOWED_LANGUAGES[s.langSlug]) || question.codeSnippets[0];
         if (defaultSnippet) {
           setCode(defaultSnippet.code);
+          prevCodeLength.current = defaultSnippet.code.length;
           setLanguage(defaultSnippet.langSlug);
         }
         
@@ -134,7 +173,8 @@ export default function Arena() {
           languageId: currentLangId,
           sessionId: gameId,
           wrongSubmissions,
-          userComplexity: 'O(n)' 
+          userComplexity: 'O(n)',
+          isFlagged: isFlagged.current
         }, { withCredentials: true });
 
         const data = response.data?.data;
@@ -259,7 +299,10 @@ export default function Arena() {
                           const newLang = e.target.value;
                           setLanguage(newLang);
                           const snippet = questionData.codeSnippets.find(s => s.langSlug === newLang);
-                          if (snippet) setCode(snippet.code);
+                          if (snippet) {
+                            setCode(snippet.code);
+                            prevCodeLength.current = snippet.code.length;
+                          }
                       }}
                       className="bg-[#0a0a0a] border border-neutral-800 text-gray-300 text-xs font-mono font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#39d353] transition-colors cursor-pointer outline-none"
                     >
@@ -294,6 +337,13 @@ export default function Arena() {
                       theme="vs-dark"
                       value={code}
                       onChange={(val) => {
+                          const diff = val.length - prevCodeLength.current;
+                          // Flag if 200+ chars appear instantly without a valid internal paste
+                          if (diff >= 200 && (Date.now() - lastValidPasteTime.current > 100)) {
+                             console.warn("Anti-Cheat: Abnormal typing speed detected! Flagging submission.");
+                             isFlagged.current = true;
+                          }
+                          prevCodeLength.current = val.length;
                           setCode(val);
                           socket.emit('playerStatusUpdate', { gameId, status: "Typing..." });
                       }}
