@@ -1,7 +1,8 @@
 import { io } from "socket.io-client";
 
-// Update the port to match whatever your Node backend is running on (e.g., 5000 or 8000)
-const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000"; 
+// Get the backend URL and strip the /api/v1 path if it exists, so Socket.io connects to the root namespace
+const rawUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000"; 
+const backendUrl = rawUrl.replace(/\/api\/v1\/?$/, "");
 
 export const socket = io(backendUrl, {
   withCredentials: true, 
