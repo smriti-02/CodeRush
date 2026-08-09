@@ -77,6 +77,9 @@ export default function Dashboard() {
         setUserProfile(res.data.data);
       } catch (err) {
         console.error("Failed to fetch profile:", err);
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          navigate('/login');
+        }
       }
     };
     fetchProfile();
