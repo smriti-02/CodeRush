@@ -262,7 +262,10 @@ const runLocally = async (stitchedCode, langSlug, stdin, expectedOutput) => {
     const fileMap = {
         'javascript': 'main.js',
         'python': 'main.py',
-        'python3': 'main.py'
+        'python3': 'main.py',
+        'java': 'Main.java',
+        'cpp': 'main.cpp',
+        'c': 'main.c'
     };
 
     const fileName = fileMap[langSlug];
@@ -276,10 +279,23 @@ const runLocally = async (stitchedCode, langSlug, stdin, expectedOutput) => {
     await fs.writeFile(path.join(workDir, 'input.txt'), stdin || '', 'utf8');
 
     let runCmd = '';
-    if (langSlug === 'javascript') runCmd = `node ${fileName} < input.txt`;
-    else if (langSlug === 'python' || langSlug === 'python3') runCmd = `python3 ${fileName} < input.txt`;
-
+    
     try {
+        if (langSlug === 'java') {
+            await exec(`javac ${fileName}`, { cwd: workDir });
+            runCmd = `java Main < input.txt`;
+        } else if (langSlug === 'cpp') {
+            await exec(`g++ ${fileName} -o main`, { cwd: workDir });
+            runCmd = `./main < input.txt`;
+        } else if (langSlug === 'c') {
+            await exec(`gcc ${fileName} -o main`, { cwd: workDir });
+            runCmd = `./main < input.txt`;
+        } else if (langSlug === 'javascript') {
+            runCmd = `node ${fileName} < input.txt`;
+        } else if (langSlug === 'python' || langSlug === 'python3') {
+            runCmd = `python3 ${fileName} < input.txt`;
+        }
+
         const { stdout, stderr } = await exec(runCmd, { cwd: workDir, timeout: 10000, maxBuffer: 10 * 1024 * 1024 });
         const actualOutput = (stdout || '').trim();
         const passed = actualOutput === (expectedOutput || '').trim();
