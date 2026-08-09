@@ -11,17 +11,30 @@ const callOpenRouter = async (messages, model = "nvidia/nemotron-3-ultra-550b-a5
     if (!OPENROUTER_API_KEY) {
         throw new ApiError(500, "OpenRouter API key is not configured.");
     }
-    const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
-        model,
-        messages
-    }, {
-        headers: {
-            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json"
-        }
-    });
+    
+    try {
+        const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+            model,
+            messages
+        }, {
+            headers: {
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "Content-Type": "application/json"
+            }
+        });
 
-    return response.data.choices[0].message.content;
+        if (!response.data || !response.data.choices || response.data.choices.length === 0) {
+            console.error("OpenRouter invalid response:", response.data);
+            throw new ApiError(500, "AI Service returned an invalid response (possibly an invalid model or rate limit).");
+        }
+
+        return response.data.choices[0].message.content;
+    } catch (error) {
+        console.error("OpenRouter API Error:", error.response?.data || error.message);
+        // Extract exact error message from OpenRouter if available
+        const errorMsg = error.response?.data?.error?.message || "Failed to communicate with AI Service.";
+        throw new ApiError(500, errorMsg);
+    }
 };
 
 export const getGameReview = asyncHandler(async (req, res) => {
