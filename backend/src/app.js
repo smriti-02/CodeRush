@@ -12,9 +12,23 @@ import aiRouter from "./routes/ai.routes.js";
 const app = express();
 app.set("trust proxy", 1);
 
+const allowedOrigins = [
+  "http://localhost:5173", 
+  "https://code-rush-vosk.vercel.app", 
+  "https://coderushv1.vercel.app",
+  process.env.CORS_ORIGIN,
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
 app.use(cors(
   {
-    origin: process.env.CORS_ORIGIN,
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true
   }
 ));
@@ -30,7 +44,8 @@ app.use(
           "'unsafe-eval'",
           "http://localhost:5173",
           "https://code-rush-vosk.vercel.app",
-          "https://cdn.jsdelivr.net" // REQUIRED FOR MONACO
+          "https://coderushv1.vercel.app",
+          "https://cdn.jsdelivr.net"
         ],
 
         "connect-src": [
@@ -40,6 +55,8 @@ app.use(
           "http://localhost:5173",
           "https://code-rush-vosk.vercel.app",
           "wss://code-rush-vosk.vercel.app",
+          "https://coderushv1.vercel.app",
+          "wss://coderushv1.vercel.app",
           "https://accounts.google.com",
           "https://github.com"
         ],
@@ -50,6 +67,7 @@ app.use(
           "http://localhost:5173",
           "https://lh3.googleusercontent.com",
           "https://code-rush-vosk.vercel.app",
+          "https://coderushv1.vercel.app",
           "https://avatars.githubusercontent.com"
         ],
 
@@ -57,7 +75,8 @@ app.use(
           "'self'",
           "'unsafe-inline'",
           "http://localhost:5173",
-          "https://code-rush-vosk.vercel.app"
+          "https://code-rush-vosk.vercel.app",
+          "https://coderushv1.vercel.app"
         ],
 
         // REQUIRED FOR MONACO SYNTAX HIGHLIGHTING
