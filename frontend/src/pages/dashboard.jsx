@@ -78,7 +78,7 @@ export default function Dashboard() {
       } catch (err) {
         console.error("Failed to fetch profile:", err);
         if (err.response?.status === 401 || err.response?.status === 403) {
-          navigate('/login');
+          navigate('/');
         }
       }
     };
