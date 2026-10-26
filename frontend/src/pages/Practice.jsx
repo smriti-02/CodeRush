@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
-import axios from 'axios';
+import axiosInstance from '../api/axios';
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { GripVertical, GripHorizontal, ArrowLeft } from "lucide-react";
 
@@ -27,9 +27,7 @@ export default function Practice() {
   useEffect(() => {
     const fetchQuestionData = async () => {
       try {
-        const response = await axios.get(`http://localhost:8000/api/v1/games/arena/${gameId}`, {
-            withCredentials: true
-        });
+        const response = await axiosInstance.get(`/games/arena/${gameId}`);
         const gameData = response.data.data;
         const question = gameData.question;
 
@@ -62,14 +60,14 @@ export default function Practice() {
     const currentLangId = ALLOWED_LANGUAGES[language]?.id || 62;
 
     try {
-        const response = await axios.post('http://localhost:8000/api/v1/judge/run', {
+        const response = await axiosInstance.post('/judge/run', {
           questionId: questionData._id,
           sourceCode: code,
           langSlug: language,
           languageId: currentLangId,
           testCases: questionData.sampleTestCase,
           sessionId: gameId
-        }, { withCredentials: true });
+        });
 
         const result = response.data?.data;
         setExecResult(result || null);
@@ -86,7 +84,7 @@ export default function Practice() {
     const currentLangId = ALLOWED_LANGUAGES[language]?.id || 62;
 
     try {
-        const response = await axios.post('http://localhost:8000/api/v1/judge/submit', {
+        const response = await axiosInstance.post('/judge/submit', {
           questionId: questionData._id,
           sourceCode: code,
           langSlug: language,
@@ -94,7 +92,7 @@ export default function Practice() {
           sessionId: gameId,
           wrongSubmissions: 0,
           userComplexity: 'O(n)' 
-        }, { withCredentials: true });
+        });
 
         const data = response.data?.data;
         const result = data?.result;

@@ -12,35 +12,135 @@ const exec = promisify(execCb);
 // In-memory sandbox pool for reuse in a single server process
 // Value shape: { sandbox: SandboxInstance, lastUsed: epochMs, createdAt: epochMs }
 const sandboxPool = new Map();
+const SANDBOX_NAME = 'coderush-engine-v1';
 
 // Eviction: stop sandboxes idle longer than SANDBOX_IDLE_TIMEOUT_MINUTES (default 10m)
 const SANDBOX_IDLE_TIMEOUT_MINUTES = Number(process.env.SANDBOX_IDLE_TIMEOUT_MINUTES) || 10;
 const SANDBOX_EVICTION_INTERVAL_MS = 60 * 1000; // run every minute
 
 const startSandboxEviction = () => {
-    setInterval(async () => {
+    const timer = setInterval(async () => {
         try {
             const now = Date.now();
             for (const [name, meta] of sandboxPool.entries()) {
                 const idleMs = now - (meta.lastUsed || meta.createdAt || now);
                 if (idleMs > SANDBOX_IDLE_TIMEOUT_MINUTES * 60 * 1000) {
                     try {
-                        console.log(`Evicting sandbox ${name} after ${Math.round(idleMs/1000)}s idle`);
+                        console.log(`[Judge Eviction] Evicting sandbox ${name} after ${Math.round(idleMs/1000)}s idle`);
                         await meta.sandbox.stop();
                     } catch (stopErr) {
-                        console.error(`Failed to stop sandbox ${name}:`, stopErr);
+                        console.error(`[Judge Eviction] Failed to stop sandbox ${name}:`, stopErr);
                     }
                     sandboxPool.delete(name);
                 }
             }
         } catch (err) {
-            console.error('Sandbox eviction job error:', err);
+            console.error('[Judge Eviction] Sandbox eviction job error:', err);
         }
     }, SANDBOX_EVICTION_INTERVAL_MS);
+
+    if (timer.unref) timer.unref();
 };
 
 // Start eviction loop once
 startSandboxEviction();
+
+/**
+ * Resolves credentials for Vercel Sandbox.
+ * For external platforms (like Render), VERCEL_TOKEN + VERCEL_PROJECT_ID + VERCEL_TEAM_ID
+ * are used to bypass the 12-hour OIDC token expiry.
+ */
+export const getVercelCredentials = () => {
+    const token = process.env.VERCEL_TOKEN || process.env.VERCEL_API_TOKEN || process.env.VERCEL_OIDC_TOKEN;
+    const projectId = process.env.VERCEL_PROJECT_ID || 'prj_aZ92AAYfrwSTXrk6K6RIVxobfRri';
+    const teamId = process.env.VERCEL_TEAM_ID || 'team_qZOxn38WtTNRKCnsynpJv9sK';
+
+    if (token) {
+        return { token, projectId, teamId };
+    }
+    return {};
+};
+
+/**
+ * Gets an active sandbox from the local pool or resumes/creates coderush-engine-v1
+ * using Sandbox.getOrCreate so compilers are saved in the snapshot.
+ */
+export const getOrInitSandbox = async () => {
+    if (sandboxPool.has(SANDBOX_NAME)) {
+        const meta = sandboxPool.get(SANDBOX_NAME);
+        meta.lastUsed = Date.now();
+        return meta.sandbox;
+    }
+
+    const credentials = getVercelCredentials();
+    let sandbox = null;
+
+    try {
+        console.log(`[Judge Sandbox] Initializing/resuming named sandbox "${SANDBOX_NAME}"...`);
+        sandbox = await Sandbox.getOrCreate({
+            name: SANDBOX_NAME,
+            ...credentials,
+            onCreate: async (sbx) => {
+                console.log("[Judge Sandbox] First-time setup: Installing GCC, G++, and Java 17 Amazon Corretto...");
+                const installRes = await sbx.runCommand({
+                    cmd: "dnf",
+                    args: ["install", "-y", "gcc", "gcc-c++", "java-17-amazon-corretto-devel"],
+                    sudo: true
+                });
+                if (installRes.exitCode !== 0) {
+                    console.error("[Judge Sandbox] Compiler installation error:", await installRes.stderr());
+                } else {
+                    console.log("[Judge Sandbox] Compilers installed and snapshotted successfully.");
+                }
+            }
+        });
+    } catch (err) {
+        console.warn("[Judge Sandbox] Sandbox.getOrCreate failed:", err.message);
+        try {
+            if (typeof Sandbox.get === 'function') {
+                sandbox = await Sandbox.get({ name: SANDBOX_NAME, ...credentials });
+            } else {
+                sandbox = await Sandbox.create({ name: SANDBOX_NAME, ...credentials });
+            }
+        } catch (err2) {
+            console.warn("[Judge Sandbox] Named sandbox fallback failed, trying ephemeral sandbox:", err2.message);
+            sandbox = await Sandbox.create({ persistent: false, ...credentials });
+        }
+    }
+
+    // Verify compilers are ready in the running sandbox instance
+    try {
+        const check = await sandbox.runCommand({ cmd: "sh", args: ["-c", "which g++ && which javac"] });
+        if (check.exitCode !== 0) {
+            console.log("[Judge Sandbox] Compilers missing in active sandbox. Installing now...");
+            await sandbox.runCommand({
+                cmd: "dnf",
+                args: ["install", "-y", "gcc", "gcc-c++", "java-17-amazon-corretto-devel"],
+                sudo: true
+            });
+            console.log("[Judge Sandbox] Compilers installed.");
+        }
+    } catch (checkErr) {
+        console.error("[Judge Sandbox] Compiler verification check failed:", checkErr);
+    }
+
+    sandboxPool.set(SANDBOX_NAME, { sandbox, lastUsed: Date.now(), createdAt: Date.now() });
+    return sandbox;
+};
+
+/**
+ * Pre-warms the sandbox engine in the background on server boot.
+ */
+export const warmUpJudgeEngine = async () => {
+    if (process.env.USE_LOCAL_JUDGE === 'true') return;
+    try {
+        console.log("[Judge Sandbox] Starting background warmup for sandbox engine...");
+        const sbx = await getOrInitSandbox();
+        console.log(`[Judge Sandbox] Engine ready (ID/Name: ${sbx.name || SANDBOX_NAME})`);
+    } catch (err) {
+        console.warn("[Judge Sandbox] Warmup failed (will retry on first submission):", err.message);
+    }
+};
 
 export const sendToJudge = async (questionId, userCode, languageId, langSlug, testCases = null, sessionId = null, evaluateAll = false) => {
     try {
@@ -48,7 +148,6 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
         if (!question) throw new Error("Question not found in database.");
 
         const stitchedCode = stitchCode(userCode, langSlug, question.metaData);
-        // file extension map for local stitched file
         const extMap = { javascript: 'js', python: 'py', python3: 'py', c: 'c', cpp: 'cpp', java: 'java' };
         
         const testCasesToRun = evaluateAll ? question.allTestCases : (Array.isArray(testCases) && testCases.length ? testCases : [question.allTestCases[0]]);
@@ -58,81 +157,29 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
             return await runLocally(stitchedCode, langSlug, testCasesToRun[0]?.input || "", testCasesToRun[0]?.output || "");
         }
 
-        // If not using local runner and no Vercel token is available, fail fast
-        if (!process.env.VERCEL_OIDC_TOKEN && !process.env.VERCEL_API_TOKEN && process.env.NODE_ENV !== 'production') {
-            throw new Error("Vercel token missing. Set VERCEL_API_TOKEN or VERCEL_OIDC_TOKEN, or set USE_LOCAL_JUDGE=true for local runs.");
+        const credentials = getVercelCredentials();
+        if (!credentials.token && process.env.NODE_ENV !== 'production') {
+            throw new Error("Vercel token missing. Set VERCEL_TOKEN, VERCEL_API_TOKEN, or VERCEL_OIDC_TOKEN, or set USE_LOCAL_JUDGE=true for local runs.");
         }
 
-        // Create an identifier for this execution; prefer sessionId (gameId) when provided
         const execId = crypto.randomUUID();
-        // FIXED: Use a single static sandbox name to avoid creating thousands of snapshots.
-        // Files are already isolated by workDir = `/tmp/exec_${execId}` so concurrent runs won't collide.
-        const sandboxName = `coderush-engine-v1`;
+        const sandbox = await getOrInitSandbox();
 
-        // Reuse sandbox from pool if available (avoids repeated create/delete)
-        let sandbox = null;
-        if (sessionId && sandboxPool.has(sandboxName)) {
-            const meta = sandboxPool.get(sandboxName);
-            sandbox = meta.sandbox;
-            // update lastUsed
-            meta.lastUsed = Date.now();
-        } else {
-            try {
-                sandbox = await Sandbox.create({ name: sandboxName });
-            } catch (err) {
-                // If a sandbox with this name already exists on Vercel, try to resume it
-                try {
-                    if (typeof Sandbox.get === 'function') {
-                        sandbox = await Sandbox.get(sandboxName);
-                    } else {
-                        // Fallback: try creating without throwing (some SDKs accept resume flag)
-                        sandbox = await Sandbox.create({ name: sandboxName, resume: true });
-                    }
-                } catch (err2) {
-                    console.warn("Failed to get/resume sandbox, trying ephemeral fallback...", err2.message);
-                    try {
-                        // FALLBACK: If Vercel blocks us due to the 15GB Snapshot Storage limit,
-                        // we can bypass it by creating an ephemeral sandbox (persistent: false) 
-                        // which does not use any snapshot storage. It's slower, but it works for free!
-                        sandbox = await Sandbox.create({ persistent: false });
-                    } catch (err3) {
-                        throw err;
-                    }
-                }
-            }
-
-            if (sessionId && sandbox) sandboxPool.set(sandboxName, { sandbox, lastUsed: Date.now(), createdAt: Date.now() });
-        }
+        // Create isolated workspace for this execution
+        const workDir = `/tmp/exec_${execId}`;
+        await sandbox.runCommand({ cmd: "sh", args: ["-c", `mkdir -p ${workDir}`] });
 
         try {
-            // Check if compilers are installed, install if missing
-            const checkCompilers = await sandbox.runCommand({ cmd: "sh", args: ["-c", "which g++"] });
-            if (checkCompilers.exitCode !== 0) {
-                console.log("Installing compilers (First run only)...");
-                await sandbox.runCommand({
-                    cmd: "dnf",
-                    args: ["install", "-y", "gcc", "gcc-c++", "java-17-amazon-corretto-devel"],
-                    sudo: true
-                });
-            }
-
-            // Create isolated workspace (use same execId as the sandbox name)
-            const workDir = `/tmp/exec_${execId}`;
-            await sandbox.runCommand({ cmd: "sh", args: ["-c", `mkdir -p ${workDir}`] });
-
-            // Ensure inputs are strings before encoding to avoid Buffer.from(undefined)
             const safeCode = typeof stitchedCode === 'string' ? stitchedCode : String(stitchedCode);
             const encodedCode = Buffer.from(safeCode).toString("base64");
 
-            // Write stitched code to a local temporary file for debugging/inspection
-            try {
-                const ext = extMap[langSlug] || 'txt';
-                const localPath = path.join(os.tmpdir(), `stitched_${execId}.${ext}`);
-                await fs.writeFile(localPath, safeCode, 'utf8');
-                console.log(`Stitched code written to: ${localPath}`);
-                // Removed console.log of preview to prevent terminal clutter
-            } catch (writeErr) {
-                console.error('Failed to write stitched code to local temp file:', writeErr);
+            // Write stitched code to local temp for inspection if in dev
+            if (process.env.NODE_ENV !== 'production') {
+                try {
+                    const ext = extMap[langSlug] || 'txt';
+                    const localPath = path.join(os.tmpdir(), `stitched_${execId}.${ext}`);
+                    await fs.writeFile(localPath, safeCode, 'utf8');
+                } catch (_) {}
             }
 
             const fileMap = {
@@ -152,17 +199,29 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
             let execCmdStr = "";
 
             if (langSlug === 'c') {
-                const compile = await sandbox.runCommand({ cmd: "sh", args: ["-c", `cd ${workDir} && gcc ${fileName} -o main`] });
+                const compile = await sandbox.runCommand({ 
+                    cmd: "sh", 
+                    args: ["-c", `cd ${workDir} && gcc ${fileName} -o main`],
+                    timeoutMs: 15000 
+                });
                 if (compile.exitCode !== 0) return formatResponse("Compilation Error", "", await compile.stderr(), "");
                 execCmdStr = `cd ${workDir} && ./main < input.txt`;
             }
             else if (langSlug === 'cpp') {
-                const compile = await sandbox.runCommand({ cmd: "sh", args: ["-c", `cd ${workDir} && g++ ${fileName} -o main`] });
+                const compile = await sandbox.runCommand({ 
+                    cmd: "sh", 
+                    args: ["-c", `cd ${workDir} && g++ ${fileName} -o main`],
+                    timeoutMs: 15000 
+                });
                 if (compile.exitCode !== 0) return formatResponse("Compilation Error", "", await compile.stderr(), "");
                 execCmdStr = `cd ${workDir} && ./main < input.txt`;
             }
             else if (langSlug === 'java') {
-                const compile = await sandbox.runCommand({ cmd: "sh", args: ["-c", `cd ${workDir} && javac ${fileName}`] });
+                const compile = await sandbox.runCommand({ 
+                    cmd: "sh", 
+                    args: ["-c", `cd ${workDir} && javac ${fileName}`],
+                    timeoutMs: 15000 
+                });
                 if (compile.exitCode !== 0) return formatResponse("Compilation Error", "", await compile.stderr(), "");
                 execCmdStr = `cd ${workDir} && java Main < input.txt`;
             }
@@ -181,7 +240,11 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
                 const encodedInput = Buffer.from(stdin).toString("base64");
                 
                 await sandbox.runCommand({ cmd: "sh", args: ["-c", `echo ${encodedInput} | base64 -d > ${workDir}/input.txt`] });
-                const execCmd = await sandbox.runCommand({ cmd: "sh", args: ["-c", execCmdStr] });
+                const execCmd = await sandbox.runCommand({ 
+                    cmd: "sh", 
+                    args: ["-c", execCmdStr],
+                    timeoutMs: 10000 
+                });
 
                 const stdout = await execCmd.stdout();
                 const stderr = await execCmd.stderr();
@@ -198,27 +261,23 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
                 );
 
                 if (result.status !== "Accepted") {
-                    await sandbox.runCommand({ cmd: "sh", args: ["-c", `rm -rf ${workDir}`] });
                     return result;
                 }
                 lastResult = result;
             }
 
-            await sandbox.runCommand({ cmd: "sh", args: ["-c", `rm -rf ${workDir}`] });
             return lastResult || formatResponse("Accepted", "", "", "");
 
         } finally {
-            // If sandbox is pooled (per-session), don't stop it — just update lastUsed.
+            // Clean up isolated execution directory
             try {
-                if (sessionId && sandboxPool.has(sandboxName)) {
-                    const meta = sandboxPool.get(sandboxName);
-                    meta.lastUsed = Date.now();
-                } else {
-                    // Stop the sandbox to trigger the filesystem snapshot automatically
-                    await sandbox.stop();
-                }
-            } catch (stopErr) {
-                console.error('Error while finalizing sandbox:', stopErr);
+                await sandbox.runCommand({ cmd: "sh", args: ["-c", `rm -rf ${workDir}`] });
+            } catch (_) {}
+
+            // Keep sandbox alive in pool; update lastUsed time
+            if (sandboxPool.has(SANDBOX_NAME)) {
+                const meta = sandboxPool.get(SANDBOX_NAME);
+                meta.lastUsed = Date.now();
             }
         }
 

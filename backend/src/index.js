@@ -7,12 +7,16 @@ import http from "http";
 import { verifySocketJWT } from "./middlewares/socketAuth.middleware.js";
 import { initializeSocketHandlers } from "./socket/socketHandler.js";
 
-// Prefer .env.local (from `npx vercel env pull .env.local`) when present
-const envPath = fs.existsSync('./.env.local') ? './.env.local' : './.env';
-dotenv.config({ path: envPath });
+// Load base .env then overlay .env.local when present
+dotenv.config({ path: './.env' });
+if (fs.existsSync('./.env.local')) {
+    dotenv.config({ path: './.env.local', override: true });
+}
 
-if (!process.env.VERCEL_OIDC_TOKEN && process.env.NODE_ENV !== 'production') {
-    console.log('Warning: VERCEL_OIDC_TOKEN is not set. If you intend to use Vercel sandbox, run `npx vercel env pull .env.local` or set USE_LOCAL_JUDGE=true for local runs.');
+import { warmUpJudgeEngine } from "./services/judge.services.js";
+
+if (!process.env.VERCEL_TOKEN && !process.env.VERCEL_API_TOKEN && !process.env.VERCEL_OIDC_TOKEN && process.env.NODE_ENV !== 'production' && process.env.USE_LOCAL_JUDGE !== 'true') {
+    console.log('Warning: No Vercel token set (VERCEL_TOKEN or VERCEL_OIDC_TOKEN). Set VERCEL_TOKEN for external deploys like Render, or set USE_LOCAL_JUDGE=true for local runs.');
 }
 
 const server = http.createServer(app);
@@ -37,6 +41,8 @@ connectDB()
     });
     server.listen(process.env.PORT || 8000, ()=>{
         console.log(`Server is running on port ${process.env.PORT || 8000}`);
+        // Pre-warm the sandbox engine in background so first execution is instantaneous
+        warmUpJudgeEngine();
     })
 })
 .catch((err) => {
