@@ -16,9 +16,12 @@ const allowedOrigins = [
   "http://localhost:5173", 
   "https://code-rush-vosk.vercel.app", 
   "https://coderushv1.vercel.app",
+  "https://coderushv2.vercel.app",
   process.env.CORS_ORIGIN,
   process.env.FRONTEND_URL
 ].filter(Boolean);
+
+export { allowedOrigins };
 
 app.use(cors(
   {
@@ -45,6 +48,7 @@ app.use(
           "http://localhost:5173",
           "https://code-rush-vosk.vercel.app",
           "https://coderushv1.vercel.app",
+          "https://coderushv2.vercel.app",
           "https://cdn.jsdelivr.net"
         ],
 
@@ -57,8 +61,12 @@ app.use(
           "wss://code-rush-vosk.vercel.app",
           "https://coderushv1.vercel.app",
           "wss://coderushv1.vercel.app",
+          "https://coderushv2.vercel.app",
+          "wss://coderushv2.vercel.app",
           "https://accounts.google.com",
-          "https://github.com"
+          "https://github.com",
+          ...(process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : []),
+          ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
         ],
 
         "img-src": [
@@ -68,6 +76,7 @@ app.use(
           "https://lh3.googleusercontent.com",
           "https://code-rush-vosk.vercel.app",
           "https://coderushv1.vercel.app",
+          "https://coderushv2.vercel.app",
           "https://avatars.githubusercontent.com"
         ],
 
@@ -76,7 +85,8 @@ app.use(
           "'unsafe-inline'",
           "http://localhost:5173",
           "https://code-rush-vosk.vercel.app",
-          "https://coderushv1.vercel.app"
+          "https://coderushv1.vercel.app",
+          "https://coderushv2.vercel.app"
         ],
 
         // REQUIRED FOR MONACO SYNTAX HIGHLIGHTING

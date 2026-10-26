@@ -99,6 +99,14 @@ export default function Dashboard() {
   useEffect(() => {
     if (!socket.connected) socket.connect();
 
+    const handleConnect = () => {
+      console.log("[Socket] Successfully connected! ID:", socket.id);
+    };
+
+    const handleConnectError = (error) => {
+      console.error("[Socket] Connection error:", error.message);
+    };
+
     const handleMatchFound = (data) => {
       setProposal(null);
       setIsSearching(false);
@@ -120,12 +128,16 @@ export default function Dashboard() {
       toast.error(data.message || "Match declined. Back in queue.");
     };
 
+    socket.on("connect", handleConnect);
+    socket.on("connect_error", handleConnectError);
     socket.on("matchFound", handleMatchFound);
     socket.on("matchProposed", handleMatchProposed);
     socket.on("proposalDeclined", handleProposalDeclined);
     socket.on("playerCountUpdate", setPlayerStats);
 
     return () => {
+      socket.off("connect", handleConnect);
+      socket.off("connect_error", handleConnectError);
       socket.off("matchFound", handleMatchFound);
       socket.off("matchProposed", handleMatchProposed);
       socket.off("proposalDeclined", handleProposalDeclined);

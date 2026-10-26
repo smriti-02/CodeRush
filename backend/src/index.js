@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import fs from 'fs';
 import connectDB from "./db/index.js";
-import app from "./app.js";
+import app, { allowedOrigins } from "./app.js";
 import { Server } from "socket.io";
 import http from "http";
 import { verifySocketJWT } from "./middlewares/socketAuth.middleware.js";
@@ -22,7 +22,7 @@ if (!process.env.VERCEL_TOKEN && !process.env.VERCEL_API_TOKEN && !process.env.V
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: process.env.CORS_ORIGIN,
+        origin: allowedOrigins,
         credentials: true
     }
 });
