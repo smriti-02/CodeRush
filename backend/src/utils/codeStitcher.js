@@ -13,6 +13,7 @@ export const stitchCode = (userCode, langSlug, metaDataStr) => {
 };
 
 const generateJSDriver = (userCode, funcName, params) => {
+    const expectedArgCount = params && Array.isArray(params) ? params.length : 1;
     return `
 const fs = require('fs');
 ${userCode}
@@ -26,17 +27,32 @@ try {
         const raw = fs.readFileSync(0, 'utf-8');
         if (!raw || !raw.trim()) return;
         const lines = raw.trim().split('\\n').map(l => l.trim()).filter(Boolean);
-        let parsed;
-        try {
-            // If single line that's JSON, parse it; if multiple lines try to parse each
-            if (lines.length === 1) parsed = JSON.parse(lines[0]);
-            else parsed = lines.map(l => JSON.parse(l));
-        } catch (e) {
-            // Fallback: treat lines as raw strings
-            parsed = lines.length === 1 ? lines[0] : lines;
+        const expectedArgCount = ${expectedArgCount};
+        let args = [];
+
+        if (expectedArgCount === 1) {
+            try {
+                args = [JSON.parse(raw.trim())];
+            } catch (e) {
+                args = [raw.trim()];
+            }
+        } else if (lines.length === expectedArgCount) {
+            args = lines.map(l => {
+                try { return JSON.parse(l); } catch(e) { return l; }
+            });
+        } else {
+            try {
+                const parsedWhole = JSON.parse(raw.trim());
+                if (Array.isArray(parsedWhole) && parsedWhole.length === expectedArgCount) {
+                    args = parsedWhole;
+                } else {
+                    args = [parsedWhole];
+                }
+            } catch(e) {
+                args = lines;
+            }
         }
 
-        const args = Array.isArray(parsed) ? parsed : [parsed];
         let result;
         try {
             if (typeof globalThis['${funcName}'] === 'function') {
@@ -59,25 +75,45 @@ try {
 };
 
 const generatePythonDriver = (userCode, funcName, params) => {
+    const expectedArgCount = params && Array.isArray(params) ? params.length : 1;
     return `
 import sys
 import json
 from typing import *
 ${userCode}
-def _parse_input():
+def _parse_input(expected_count):
     raw = sys.stdin.read().strip()
     if not raw:
         return []
     lines = [l for l in raw.splitlines() if l.strip()]
-    parsed = []
-    # try parsing entire input as JSON
+
+    # If the function takes exactly 1 parameter, parse the whole input as that single parameter
+    if expected_count == 1:
+        try:
+            return [json.loads(raw)]
+        except Exception:
+            return [raw]
+
+    # If line count matches expected parameter count, parse each line
+    if len(lines) == expected_count:
+        args = []
+        for l in lines:
+            try:
+                args.append(json.loads(l))
+            except Exception:
+                args.append(l)
+        return args
+
+    # Try parsing whole as JSON array of arguments
     try:
         whole = json.loads(raw)
-        if isinstance(whole, list):
+        if isinstance(whole, list) and len(whole) == expected_count:
             return whole
         return [whole]
     except Exception:
         pass
+
+    parsed = []
     for l in lines:
         try:
             parsed.append(json.loads(l))
@@ -86,7 +122,7 @@ def _parse_input():
     return parsed
 
 if __name__ == '__main__':
-    args = _parse_input()
+    args = _parse_input(${expectedArgCount})
     try:
         # prefer a free function
         if '${funcName}' in globals() and callable(globals()['${funcName}']):
@@ -118,26 +154,26 @@ const generateCppDriver = (userCode, funcName, params) => {
                 argsCode += `    int ${varName} = parseInteger(line);\n`;
             } else if (param.type === 'string') {
                 argsCode += `    string ${varName} = parseString(line);\n`;
-            } else if (param.type === 'integer[]') {
+            } else if (param.type === 'integer[]' || param.type === 'list<integer>') {
                 argsCode += `    vector<int> ${varName} = parseIntegerArray(line);\n`;
-            } else if (param.type === 'string[]') {
+            } else if (param.type === 'string[]' || param.type === 'list<string>') {
                 argsCode += `    vector<string> ${varName} = parseStringArray(line);\n`;
+            } else if (param.type === 'character[]' || param.type === 'char[]') {
+                argsCode += `    vector<string> ${varName}Str = parseStringArray(line);\n    vector<char> ${varName};\n    for(auto& s: ${varName}Str) if(!s.empty()) ${varName}.push_back(s[0]);\n`;
+            } else if (param.type === 'integer[][]' || param.type === 'list<list<integer>>' || param.type === 'vector<vector<int>>') {
+                argsCode += `    vector<vector<int>> ${varName} = parseListListInteger(line);\n`;
+            } else if (param.type === 'string[][]' || param.type === 'list<list<string>>') {
+                argsCode += `    vector<vector<string>> ${varName} = parseListListString(line);\n`;
+            } else if (param.type === 'character[][]' || param.type === 'char[][]') {
+                argsCode += `    vector<vector<string>> ${varName}Str = parseListListString(line);\n    vector<vector<char>> ${varName};\n    for(auto& r: ${varName}Str) { vector<char> row; for(auto& s: r) if(!s.empty()) row.push_back(s[0]); ${varName}.push_back(row); }\n`;
             } else if (param.type === 'boolean') {
                 argsCode += `    bool ${varName} = (trimString(line) == "true");\n`;
             } else if (param.type === 'long') {
                 argsCode += `    long long ${varName} = stoll(trimString(line));\n`;
             } else if (param.type === 'double') {
                 argsCode += `    double ${varName} = stod(trimString(line));\n`;
-            } else if (param.type === 'character') {
+            } else if (param.type === 'character' || param.type === 'char') {
                 argsCode += `    char ${varName} = parseString(line)[0];\n`;
-            } else if (param.type === 'list<integer>') {
-                argsCode += `    vector<int> ${varName} = parseListInteger(line);\n`;
-            } else if (param.type === 'list<string>') {
-                argsCode += `    vector<string> ${varName} = parseListString(line);\n`;
-            } else if (param.type === 'list<list<integer>>') {
-                argsCode += `    vector<vector<int>> ${varName} = parseListListInteger(line);\n`;
-            } else if (param.type === 'list<list<string>>') {
-                argsCode += `    vector<vector<string>> ${varName} = parseListListString(line);\n`;
             } else {
                 argsCode += `    // Unsupported type ${param.type}\n`;
             }
@@ -354,26 +390,28 @@ const generateJavaDriver = (userCode, funcName, params) => {
                 argsCode += `        int ${varName} = parseInteger(line${i});\n`;
             } else if (param.type === 'string') {
                 argsCode += `        String ${varName} = parseString(line${i});\n`;
-            } else if (param.type === 'integer[]') {
+            } else if (param.type === 'integer[]' || param.type === 'int[]' || param.type === 'list<integer>') {
                 argsCode += `        int[] ${varName} = parseIntegerArray(line${i});\n`;
-            } else if (param.type === 'string[]') {
+            } else if (param.type === 'string[]' || param.type === 'list<string>') {
                 argsCode += `        String[] ${varName} = parseStringArray(line${i});\n`;
+            } else if (param.type === 'integer[][]' || param.type === 'int[][]') {
+                argsCode += `        int[][] ${varName} = parse2DIntegerArray(line${i});\n`;
+            } else if (param.type === 'string[][]') {
+                argsCode += `        String[][] ${varName} = parse2DStringArray(line${i});\n`;
+            } else if (param.type === 'character[][]' || param.type === 'char[][]') {
+                argsCode += `        char[][] ${varName} = parse2DCharArray(line${i});\n`;
+            } else if (param.type === 'list<list<integer>>') {
+                argsCode += `        List<List<Integer>> ${varName} = parseListListInteger(line${i});\n`;
+            } else if (param.type === 'list<list<string>>') {
+                argsCode += `        List<List<String>> ${varName} = parseListListString(line${i});\n`;
             } else if (param.type === 'boolean') {
                 argsCode += `        boolean ${varName} = line${i}.trim().equals("true");\n`;
             } else if (param.type === 'long') {
                 argsCode += `        long ${varName} = Long.parseLong(line${i}.trim());\n`;
             } else if (param.type === 'double') {
                 argsCode += `        double ${varName} = Double.parseDouble(line${i}.trim());\n`;
-            } else if (param.type === 'character') {
+            } else if (param.type === 'character' || param.type === 'char') {
                 argsCode += `        char ${varName} = parseString(line${i}).charAt(0);\n`;
-            } else if (param.type === 'list<integer>') {
-                argsCode += `        List<Integer> ${varName} = parseListInteger(line${i});\n`;
-            } else if (param.type === 'list<string>') {
-                argsCode += `        List<String> ${varName} = parseListString(line${i});\n`;
-            } else if (param.type === 'list<list<integer>>') {
-                argsCode += `        List<List<Integer>> ${varName} = parseListListInteger(line${i});\n`;
-            } else if (param.type === 'list<list<string>>') {
-                argsCode += `        List<List<String>> ${varName} = parseListListString(line${i});\n`;
             } else {
                 argsCode += `        // Unsupported type ${param.type}\n`;
             }
@@ -462,6 +500,43 @@ public class Main {
         return res;
     }
 
+    public static int[][] parse2DIntegerArray(String s) {
+        List<List<Integer>> list = parseListListInteger(s);
+        int[][] res = new int[list.size()][];
+        for (int i = 0; i < list.size(); i++) {
+            List<Integer> row = list.get(i);
+            res[i] = new int[row.size()];
+            for (int j = 0; j < row.size(); j++) {
+                res[i][j] = row.get(j);
+            }
+        }
+        return res;
+    }
+
+    public static String[][] parse2DStringArray(String s) {
+        List<List<String>> list = parseListListString(s);
+        String[][] res = new String[list.size()][];
+        for (int i = 0; i < list.size(); i++) {
+            List<String> row = list.get(i);
+            res[i] = row.toArray(new String[0]);
+        }
+        return res;
+    }
+
+    public static char[][] parse2DCharArray(String s) {
+        List<List<String>> list = parseListListString(s);
+        char[][] res = new char[list.size()][];
+        for (int i = 0; i < list.size(); i++) {
+            List<String> row = list.get(i);
+            res[i] = new char[row.size()];
+            for (int j = 0; j < row.size(); j++) {
+                String str = row.get(j);
+                res[i][j] = str.isEmpty() ? ' ' : str.charAt(0);
+            }
+        }
+        return res;
+    }
+
     public static List<List<String>> parseListListString(String s) {
         s = s.trim();
         List<List<String>> res = new ArrayList<>();
@@ -488,6 +563,14 @@ public class Main {
             for (int i = 0; i < arr.length; i++) {
                 printResult(arr[i]);
                 if (i != arr.length - 1) System.out.print(",");
+            }
+            System.out.print("]");
+        } else if (obj instanceof int[][]) {
+            int[][] mat = (int[][]) obj;
+            System.out.print("[");
+            for (int i = 0; i < mat.length; i++) {
+                printResult(mat[i]);
+                if (i != mat.length - 1) System.out.print(",");
             }
             System.out.print("]");
         } else if (obj instanceof String[]) {

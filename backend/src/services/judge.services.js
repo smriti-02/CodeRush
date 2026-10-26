@@ -12,7 +12,7 @@ const exec = promisify(execCb);
 // In-memory sandbox pool for reuse in a single server process
 // Value shape: { sandbox: SandboxInstance, lastUsed: epochMs, createdAt: epochMs }
 const sandboxPool = new Map();
-const SANDBOX_NAME = process.env.SANDBOX_NAME || 'coderush-engine-v3';
+const SANDBOX_NAME = process.env.SANDBOX_NAME || 'coderush-engine-v4';
 
 // Eviction: stop sandboxes idle longer than SANDBOX_IDLE_TIMEOUT_MINUTES (default 10m)
 const SANDBOX_IDLE_TIMEOUT_MINUTES = Number(process.env.SANDBOX_IDLE_TIMEOUT_MINUTES) || 10;
@@ -91,23 +91,13 @@ const installCompilers = async (sbx) => {
             });
             console.log(`[Judge Sandbox] apt-get update finished with exitCode: ${updateRes.exitCode}`);
 
-            console.log("[Judge Sandbox] Installing gcc, g++, and default-jdk-headless via apt-get...");
+            console.log("[Judge Sandbox] Installing gcc, g++, and default-jdk via apt-get...");
             let installRes = await sbx.runCommand({
                 cmd: "apt-get",
-                args: ["install", "-y", "--no-install-recommends", "gcc", "g++", "default-jdk-headless"],
+                args: ["install", "-y", "gcc", "g++", "default-jdk"],
                 sudo: true,
                 timeoutMs: 180000
             });
-
-            if (installRes.exitCode !== 0) {
-                console.warn("[Judge Sandbox] default-jdk-headless failed, attempting full default-jdk package...");
-                installRes = await sbx.runCommand({
-                    cmd: "apt-get",
-                    args: ["install", "-y", "gcc", "g++", "default-jdk"],
-                    sudo: true,
-                    timeoutMs: 180000
-                });
-            }
 
             console.log(`[Judge Sandbox] apt-get install completed with exitCode: ${installRes.exitCode}`);
             if (installRes.exitCode !== 0) {
