@@ -12,7 +12,7 @@ const exec = promisify(execCb);
 // In-memory sandbox pool for reuse in a single server process
 // Value shape: { sandbox: SandboxInstance, lastUsed: epochMs, createdAt: epochMs }
 const sandboxPool = new Map();
-const SANDBOX_NAME = 'coderush-engine-v1';
+const SANDBOX_NAME = process.env.SANDBOX_NAME || 'coderush-engine-v2';
 
 // Eviction: stop sandboxes idle longer than SANDBOX_IDLE_TIMEOUT_MINUTES (default 10m)
 const SANDBOX_IDLE_TIMEOUT_MINUTES = Number(process.env.SANDBOX_IDLE_TIMEOUT_MINUTES) || 10;
@@ -62,7 +62,66 @@ export const getVercelCredentials = () => {
 };
 
 /**
- * Gets an active sandbox from the local pool or resumes/creates coderush-engine-v1
+ * Installs GCC, G++, and Java JDK inside the sandbox container.
+ * Vercel Sandbox modern managed images run Ubuntu (apt-get), while legacy runtimes run Amazon Linux (dnf).
+ */
+const installCompilers = async (sbx) => {
+    try {
+        console.log("[Judge Sandbox] Installing compilers (GCC, G++, Java JDK)...");
+        const checkApt = await sbx.runCommand({ cmd: "sh", args: ["-c", "which apt-get"] });
+
+        if (checkApt.exitCode === 0) {
+            console.log("[Judge Sandbox] Detected Ubuntu/Debian. Updating apt and installing gcc, g++, and default-jdk...");
+            const updateRes = await sbx.runCommand({
+                cmd: "sh",
+                args: ["-c", "apt-get update -y"],
+                sudo: true,
+                timeoutMs: 60000
+            });
+            if (updateRes.exitCode !== 0) {
+                console.warn("[Judge Sandbox] apt-get update warning:", await updateRes.stderr());
+            }
+
+            const installRes = await sbx.runCommand({
+                cmd: "sh",
+                args: ["-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y gcc g++ default-jdk-headless || DEBIAN_FRONTEND=noninteractive apt-get install -y gcc g++ default-jdk"],
+                sudo: true,
+                timeoutMs: 180000
+            });
+
+            if (installRes.exitCode !== 0) {
+                console.error("[Judge Sandbox] apt-get install error:", await installRes.stderr());
+            } else {
+                console.log("[Judge Sandbox] Compilers installed successfully via apt-get.");
+            }
+        } else {
+            console.log("[Judge Sandbox] Detected RHEL/Amazon Linux. Installing via dnf...");
+            const installRes = await sbx.runCommand({
+                cmd: "dnf",
+                args: ["install", "-y", "gcc", "gcc-c++", "java-17-amazon-corretto-devel"],
+                sudo: true,
+                timeoutMs: 180000
+            });
+            if (installRes.exitCode !== 0) {
+                console.error("[Judge Sandbox] dnf install error:", await installRes.stderr());
+            } else {
+                console.log("[Judge Sandbox] Compilers installed successfully via dnf.");
+            }
+        }
+
+        const verify = await sbx.runCommand({ cmd: "sh", args: ["-c", "which g++ && which javac"] });
+        if (verify.exitCode === 0) {
+            console.log("[Judge Sandbox] Verified compilers in sandbox: g++ and javac are ready.");
+        } else {
+            console.warn("[Judge Sandbox] Compiler verification check warning:", await verify.stderr());
+        }
+    } catch (installErr) {
+        console.error("[Judge Sandbox] Unexpected error during compiler installation:", installErr);
+    }
+};
+
+/**
+ * Gets an active sandbox from the local pool or resumes/creates coderush-engine-v2
  * using Sandbox.getOrCreate so compilers are saved in the snapshot.
  */
 export const getOrInitSandbox = async () => {
@@ -81,17 +140,8 @@ export const getOrInitSandbox = async () => {
             name: SANDBOX_NAME,
             ...credentials,
             onCreate: async (sbx) => {
-                console.log("[Judge Sandbox] First-time setup: Installing GCC, G++, and Java 17 Amazon Corretto...");
-                const installRes = await sbx.runCommand({
-                    cmd: "dnf",
-                    args: ["install", "-y", "gcc", "gcc-c++", "java-17-amazon-corretto-devel"],
-                    sudo: true
-                });
-                if (installRes.exitCode !== 0) {
-                    console.error("[Judge Sandbox] Compiler installation error:", await installRes.stderr());
-                } else {
-                    console.log("[Judge Sandbox] Compilers installed and snapshotted successfully.");
-                }
+                console.log("[Judge Sandbox] First-time setup: Installing compilers for snapshot...");
+                await installCompilers(sbx);
             }
         });
     } catch (err) {
@@ -113,12 +163,7 @@ export const getOrInitSandbox = async () => {
         const check = await sandbox.runCommand({ cmd: "sh", args: ["-c", "which g++ && which javac"] });
         if (check.exitCode !== 0) {
             console.log("[Judge Sandbox] Compilers missing in active sandbox. Installing now...");
-            await sandbox.runCommand({
-                cmd: "dnf",
-                args: ["install", "-y", "gcc", "gcc-c++", "java-17-amazon-corretto-devel"],
-                sudo: true
-            });
-            console.log("[Judge Sandbox] Compilers installed.");
+            await installCompilers(sandbox);
         }
     } catch (checkErr) {
         console.error("[Judge Sandbox] Compiler verification check failed:", checkErr);
