@@ -6,7 +6,15 @@ import { ParticleMorphEngine } from './ParticleMorphEngine';
 export const SharedParticleSystem = ({ scrollYProgress }) => {
   return (
     <div className="fixed inset-0 z-0 pointer-events-none bg-[#020503]">
-      <Canvas camera={{ position: [0, 0, 35], fov: 45 }}>
+      <Canvas 
+        camera={{ position: [0, 0, 35], fov: 45 }}
+        gl={{ powerPreference: 'default', antialias: false }}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+          }, false);
+        }}
+      >
         {/* Cinematic ambient lighting */}
         <ambientLight intensity={1.5} color="#ffffff" />
         <directionalLight position={[10, 20, 10]} intensity={3.5} color="#ffffff" />

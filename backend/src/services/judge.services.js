@@ -12,7 +12,7 @@ const exec = promisify(execCb);
 // In-memory sandbox pool for reuse in a single server process
 // Value shape: { sandbox: SandboxInstance, lastUsed: epochMs, createdAt: epochMs }
 const sandboxPool = new Map();
-const SANDBOX_NAME = process.env.SANDBOX_NAME || 'coderush-engine-v4';
+const SANDBOX_NAME = process.env.SANDBOX_NAME || 'coderush-engine-v5';
 
 // Eviction: stop sandboxes idle longer than SANDBOX_IDLE_TIMEOUT_MINUTES (default 10m)
 const SANDBOX_IDLE_TIMEOUT_MINUTES = Number(process.env.SANDBOX_IDLE_TIMEOUT_MINUTES) || 10;
@@ -65,7 +65,7 @@ export const getVercelCredentials = () => {
 
 /**
  * Installs GCC, G++, and Java JDK inside the sandbox container.
- * Uses direct package manager calls with root privileges and extensive logging.
+ * Uses direct shell scripts with root privileges, non-interactive flags, and symlink verification.
  */
 const installCompilers = async (sbx) => {
     try {
@@ -77,39 +77,66 @@ const installCompilers = async (sbx) => {
             console.log(`[Judge Sandbox] Target container OS: ${(await osCmd.stdout()).trim()}`);
         } catch (_) {}
 
-        // Check package manager using POSIX standard 'command -v' (never rely on 'which')
+        // Check package manager using POSIX standard 'command -v'
         const checkApt = await sbx.runCommand({ cmd: "sh", args: ["-c", "command -v apt-get"] });
         const hasApt = checkApt.exitCode === 0;
 
         if (hasApt) {
-            console.log("[Judge Sandbox] Ubuntu/Debian detected (apt-get found). Updating package lists...");
-            const updateRes = await sbx.runCommand({
-                cmd: "apt-get",
-                args: ["update", "-y"],
-                sudo: true,
-                timeoutMs: 90000
-            });
-            console.log(`[Judge Sandbox] apt-get update finished with exitCode: ${updateRes.exitCode}`);
+            console.log("[Judge Sandbox] Ubuntu/Debian detected. Running non-interactive apt-get update & install...");
+            const script = `
+                export DEBIAN_FRONTEND=noninteractive
+                mkdir -p /usr/share/man/man1
+                apt-get update -y
+                apt-get install -y --no-install-recommends gcc g++ default-jdk-headless || \\
+                apt-get install -y --no-install-recommends gcc g++ openjdk-21-jdk-headless || \\
+                apt-get install -y --no-install-recommends gcc g++ openjdk-17-jdk-headless || \\
+                apt-get install -y gcc g++ default-jdk
 
-            console.log("[Judge Sandbox] Installing gcc, g++, and default-jdk via apt-get...");
-            let installRes = await sbx.runCommand({
-                cmd: "apt-get",
-                args: ["install", "-y", "gcc", "g++", "default-jdk"],
+                JAVAC_BIN=$(find /usr -name javac -type f 2>/dev/null | head -n 1)
+                JAVA_BIN=$(find /usr -name java -type f 2>/dev/null | head -n 1)
+                if [ -n "$JAVAC_BIN" ]; then
+                    ln -sf "$JAVAC_BIN" /usr/local/bin/javac
+                    ln -sf "$JAVAC_BIN" /usr/bin/javac
+                fi
+                if [ -n "$JAVA_BIN" ]; then
+                    ln -sf "$JAVA_BIN" /usr/local/bin/java
+                    ln -sf "$JAVA_BIN" /usr/bin/java
+                fi
+            `;
+
+            const installRes = await sbx.runCommand({
+                cmd: "sh",
+                args: ["-c", script],
                 sudo: true,
-                timeoutMs: 180000
+                timeoutMs: 240000,
+                env: { DEBIAN_FRONTEND: "noninteractive" }
             });
 
-            console.log(`[Judge Sandbox] apt-get install completed with exitCode: ${installRes.exitCode}`);
+            console.log(`[Judge Sandbox] apt-get installation finished with exitCode: ${installRes.exitCode}`);
             if (installRes.exitCode !== 0) {
-                console.error("[Judge Sandbox] apt-get install stderr:", await installRes.stderr());
+                console.error("[Judge Sandbox] apt-get script stderr:", await installRes.stderr());
             }
         } else {
-            console.log("[Judge Sandbox] Non-Debian system. Attempting dnf install (Amazon Linux / Fedora)...");
+            console.log("[Judge Sandbox] Non-Debian system. Running dnf install (Amazon Linux / Fedora)...");
+            const dnfScript = `
+                dnf install -y gcc gcc-c++ java-17-amazon-corretto-devel || dnf install -y gcc gcc-c++ java-devel
+                JAVAC_BIN=$(find /usr -name javac -type f 2>/dev/null | head -n 1)
+                JAVA_BIN=$(find /usr -name java -type f 2>/dev/null | head -n 1)
+                if [ -n "$JAVAC_BIN" ]; then
+                    ln -sf "$JAVAC_BIN" /usr/local/bin/javac
+                    ln -sf "$JAVAC_BIN" /usr/bin/javac
+                fi
+                if [ -n "$JAVA_BIN" ]; then
+                    ln -sf "$JAVA_BIN" /usr/local/bin/java
+                    ln -sf "$JAVA_BIN" /usr/bin/java
+                fi
+            `;
+
             const installRes = await sbx.runCommand({
-                cmd: "dnf",
-                args: ["install", "-y", "gcc", "gcc-c++", "java-17-amazon-corretto-devel"],
+                cmd: "sh",
+                args: ["-c", dnfScript],
                 sudo: true,
-                timeoutMs: 180000
+                timeoutMs: 240000
             });
             console.log(`[Judge Sandbox] dnf install finished with exitCode: ${installRes.exitCode}`);
             if (installRes.exitCode !== 0) {
@@ -118,14 +145,14 @@ const installCompilers = async (sbx) => {
         }
 
         // Verify installations directly
-        const javacTest = await sbx.runCommand({ cmd: "sh", args: ["-c", "javac -version || /usr/bin/javac -version"] });
-        const gppTest = await sbx.runCommand({ cmd: "sh", args: ["-c", "g++ --version || /usr/bin/g++ --version"] });
+        const javacTest = await sbx.runCommand({ cmd: "sh", args: ["-c", "command -v javac || find /usr -name javac -type f 2>/dev/null | head -n 1"] });
+        const gppTest = await sbx.runCommand({ cmd: "sh", args: ["-c", "command -v g++ || find /usr -name g++ -type f 2>/dev/null | head -n 1"] });
 
-        const javacOut = ((await javacTest.stdout()) + " " + (await javacTest.stderr())).trim();
-        const gppOut = ((await gppTest.stdout()) + " " + (await gppTest.stderr())).trim();
+        const javacOut = (await javacTest.stdout()).trim();
+        const gppOut = (await gppTest.stdout()).trim();
 
-        console.log(`[Judge Sandbox Verification] javac status: (exitCode: ${javacTest.exitCode}) -> ${javacOut}`);
-        console.log(`[Judge Sandbox Verification] g++ status:   (exitCode: ${gppTest.exitCode}) -> ${gppOut.slice(0, 100)}`);
+        console.log(`[Judge Sandbox Verification] javac path: "${javacOut}" (exitCode: ${javacTest.exitCode})`);
+        console.log(`[Judge Sandbox Verification] g++ path:   "${gppOut}" (exitCode: ${gppTest.exitCode})`);
         console.log("[Judge Sandbox] === Compiler installation sequence finished ===");
     } catch (installErr) {
         console.error("[Judge Sandbox] Unexpected error during compiler installation:", installErr);
@@ -133,7 +160,7 @@ const installCompilers = async (sbx) => {
 };
 
 /**
- * Gets an active sandbox from the local pool or resumes/creates coderush-engine-v3
+ * Gets an active sandbox from the local pool or resumes/creates coderush-engine-v5
  * using Sandbox.getOrCreate so compilers are saved in the snapshot.
  */
 export const getOrInitSandbox = async () => {
@@ -172,7 +199,7 @@ export const getOrInitSandbox = async () => {
 
     // Verify compilers are ready in the running sandbox instance
     try {
-        const check = await sandbox.runCommand({ cmd: "sh", args: ["-c", "command -v g++ && command -v javac"] });
+        const check = await sandbox.runCommand({ cmd: "sh", args: ["-c", "(command -v g++ || find /usr -name g++ -type f 2>/dev/null) && (command -v javac || find /usr -name javac -type f 2>/dev/null)"] });
         if (check.exitCode !== 0) {
             console.log("[Judge Sandbox] Compilers not ready in active sandbox. Installing now...");
             await installCompilers(sandbox);
@@ -295,16 +322,31 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
             }
             else if (langSlug === 'java') {
                 console.log(`[Judge Sandbox] Compiling Java (${fileName}) in ${workDir}...`);
-                const checkJavac = await sandbox.runCommand({ cmd: "sh", args: ["-c", "command -v javac"] });
-                if (checkJavac.exitCode !== 0) {
+                let checkJavac = await sandbox.runCommand({ 
+                    cmd: "sh", 
+                    args: ["-c", "command -v javac || find /usr -name javac -type f 2>/dev/null | head -n 1"] 
+                });
+                let javacBin = (await checkJavac.stdout()).trim();
+
+                if (!javacBin) {
                     console.warn("[Judge Sandbox] 'javac' missing at compile time! Running emergency install...");
                     await installCompilers(sandbox);
+                    checkJavac = await sandbox.runCommand({ 
+                        cmd: "sh", 
+                        args: ["-c", "command -v javac || find /usr -name javac -type f 2>/dev/null | head -n 1"] 
+                    });
+                    javacBin = (await checkJavac.stdout()).trim();
                 }
 
+                if (!javacBin) {
+                    return formatResponse("Compilation Error", "", "javac: Java compiler binary not found in sandbox environment.", "");
+                }
+
+                console.log(`[Judge Sandbox] Using javac binary: "${javacBin}"`);
                 const compile = await sandbox.runCommand({ 
                     cmd: "sh", 
-                    args: ["-c", `cd ${workDir} && javac ${fileName}`],
-                    timeoutMs: 20000 
+                    args: ["-c", `cd ${workDir} && "${javacBin}" ${fileName}`],
+                    timeoutMs: 25000 
                 });
                 if (compile.exitCode !== 0) {
                     const err = await compile.stderr();
@@ -312,7 +354,13 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
                     return formatResponse("Compilation Error", "", err, "");
                 }
                 console.log("[Judge Sandbox] Java compiled successfully.");
-                execCmdStr = `cd ${workDir} && java Main < input.txt`;
+
+                let checkJava = await sandbox.runCommand({ 
+                    cmd: "sh", 
+                    args: ["-c", "command -v java || find /usr -name java -type f 2>/dev/null | head -n 1"] 
+                });
+                let javaBin = (await checkJava.stdout()).trim() || "java";
+                execCmdStr = `cd ${workDir} && "${javaBin}" Main < input.txt`;
             }
             else if (langSlug === 'javascript') {
                 execCmdStr = `cd ${workDir} && node ${fileName} < input.txt`;

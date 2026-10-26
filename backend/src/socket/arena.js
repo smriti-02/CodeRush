@@ -37,13 +37,15 @@ export const handleArenaEvents = (io, socket, userId) => {
     // Handle Reconnections
     socket.on("rejoinMatch", ({ gameId }) => {
         const game = activeGames.get(gameId);
-        if (game && game.players[userId]) {
-            if (game.disconnectTimers[userId]) {
+        if (game && game.players && game.players[userId]) {
+            if (game.disconnectTimers && game.disconnectTimers[userId]) {
+                console.log(`[Arena] RejoinMatch: Cleared disconnect timer for ${userId}`);
                 clearTimeout(game.disconnectTimers[userId]);
                 delete game.disconnectTimers[userId];
             }
             game.players[userId].status = 'connected';
             game.players[userId].socketId = socket.id;
+            playingPlayers.add(userId);
             socket.join(gameId);
             
             socket.to(gameId).emit("opponentStatusUpdate", { status: "Opponent reconnected!" });
@@ -53,7 +55,18 @@ export const handleArenaEvents = (io, socket, userId) => {
 };
 
 export const handleDisconnect = (io, socket, userId) => {
-    console.log(`User disconnected: ${userId}`);
+    console.log(`User socket disconnected: ${socket.id} (user: ${userId})`);
+
+    // Check if the user has any other active socket connections still open
+    const activeUserSockets = Array.from(io.sockets.sockets.values()).filter(
+        s => s.user?._id?.toString() === userId && s.id !== socket.id && s.connected
+    );
+
+    if (activeUserSockets.length > 0) {
+        console.log(`User ${userId} still has ${activeUserSockets.length} other active socket(s). Skipping disconnect forfeit timers.`);
+        return;
+    }
+
     onlinePlayers.delete(userId);
     playingPlayers.delete(userId);
     
@@ -61,14 +74,44 @@ export const handleDisconnect = (io, socket, userId) => {
     
     // Reconnect Grace Period (1.5 minutes)
     for (const [gameId, game] of activeGames.entries()) {
-        if (game.players[userId]) {
+        if (game.players && game.players[userId]) {
             game.players[userId].status = 'disconnected';
             socket.to(gameId).emit("opponentStatusUpdate", { status: "Disconnected... (90s to forfeit)" });
 
-            game.disconnectTimers[userId] = setTimeout(() => {
+            if (game.disconnectTimers[userId]) {
+                clearTimeout(game.disconnectTimers[userId]);
+            }
+
+            game.disconnectTimers[userId] = setTimeout(async () => {
+                const active = activeGames.get(gameId);
+                if (!active) return;
+
+                // Safety: verify the player is STILL disconnected before forfeiting
+                if (active.players[userId]?.status !== 'disconnected') {
+                    console.log(`[Arena] Player ${userId} is reconnected. Aborting 90s forfeit.`);
+                    return;
+                }
+
+                console.log(`[Arena] 90s grace period expired for ${userId} in game ${gameId}. Declaring forfeit.`);
                 io.to(gameId).emit("matchEnded", { reason: 'forfeit', loser: userId });
-                clearInterval(game.interval);
+                clearInterval(active.interval);
                 activeGames.delete(gameId);
+                playingPlayers.delete(userId);
+
+                try {
+                    const opponentId = Object.keys(active.players).find(id => id !== userId);
+                    const gameDoc = await Game.findOne({ roomId: gameId });
+                    if (gameDoc && gameDoc.status !== 'Completed') {
+                        gameDoc.status = 'Completed';
+                        if (opponentId) {
+                            gameDoc.winner = opponentId;
+                        }
+                        gameDoc.eloChange = -50;
+                        await gameDoc.save();
+                    }
+                } catch (e) {
+                    console.error("[Arena] Error finalizing forfeit match:", e);
+                }
             }, 90000); 
         }
     }

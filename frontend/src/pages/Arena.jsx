@@ -106,12 +106,25 @@ export default function Arena() {
     
     fetchArenaData();
 
-    socket.emit('rejoinMatch', { gameId });
+    const handleConnect = () => {
+      console.log("[Arena] Socket connected/reconnected. Emitting rejoinMatch for", gameId);
+      socket.emit('rejoinMatch', { gameId });
+    };
+
+    if (socket.connected) {
+      handleConnect();
+    } else {
+      socket.connect();
+    }
+
+    socket.on('connect', handleConnect);
     socket.on('timerUpdate', ({ timeLeft }) => setTimeLeft(timeLeft));
     socket.on('opponentStatusUpdate', ({ status }) => setOpponentStatus(status));
     socket.on('matchEnded', ({ reason }) => {
       if (reason === 'opponent_forfeited') {
         setMatchResult({ status: 'won', reason: 'Opponent surrendered.' });
+      } else if (reason === 'forfeit') {
+        setMatchResult({ status: 'lost', reason: 'Match forfeited due to disconnection.' });
       } else if (reason === 'timeout') {
         setMatchResult({ status: 'lost', reason: "Time's up! Max Elo penalty applied." });
       } else {
@@ -120,6 +133,7 @@ export default function Arena() {
     });
 
     return () => {
+      socket.off('connect', handleConnect);
       socket.off('timerUpdate');
       socket.off('opponentStatusUpdate');
       socket.off('matchEnded');
