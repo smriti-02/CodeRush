@@ -12,7 +12,7 @@ const exec = promisify(execCb);
 // In-memory sandbox pool for reuse in a single server process
 // Value shape: { sandbox: SandboxInstance, lastUsed: epochMs, createdAt: epochMs }
 const sandboxPool = new Map();
-const SANDBOX_NAME = process.env.SANDBOX_NAME || 'coderush-engine-v2';
+const SANDBOX_NAME = process.env.SANDBOX_NAME || 'coderush-engine-v3';
 
 // Eviction: stop sandboxes idle longer than SANDBOX_IDLE_TIMEOUT_MINUTES (default 10m)
 const SANDBOX_IDLE_TIMEOUT_MINUTES = Number(process.env.SANDBOX_IDLE_TIMEOUT_MINUTES) || 10;
@@ -56,72 +56,94 @@ export const getVercelCredentials = () => {
     const teamId = process.env.VERCEL_TEAM_ID || 'team_qZOxn38WtTNRKCnsynpJv9sK';
 
     if (token) {
+        console.log(`[Judge Sandbox] Vercel token detected (prefix: ${token.slice(0, 6)}...). Project: ${projectId}, Team: ${teamId}`);
         return { token, projectId, teamId };
     }
+    console.warn("[Judge Sandbox] No Vercel token found in environment!");
     return {};
 };
 
 /**
  * Installs GCC, G++, and Java JDK inside the sandbox container.
- * Vercel Sandbox modern managed images run Ubuntu (apt-get), while legacy runtimes run Amazon Linux (dnf).
+ * Uses direct package manager calls with root privileges and extensive logging.
  */
 const installCompilers = async (sbx) => {
     try {
-        console.log("[Judge Sandbox] Installing compilers (GCC, G++, Java JDK)...");
-        const checkApt = await sbx.runCommand({ cmd: "sh", args: ["-c", "which apt-get"] });
+        console.log("[Judge Sandbox] === Starting compiler installation ===");
+        
+        // Log environment & OS details
+        try {
+            const osCmd = await sbx.runCommand({ cmd: "sh", args: ["-c", "cat /etc/os-release | grep PRETTY_NAME || uname -a"] });
+            console.log(`[Judge Sandbox] Target container OS: ${(await osCmd.stdout()).trim()}`);
+        } catch (_) {}
 
-        if (checkApt.exitCode === 0) {
-            console.log("[Judge Sandbox] Detected Ubuntu/Debian. Updating apt and installing gcc, g++, and default-jdk...");
+        // Check package manager using POSIX standard 'command -v' (never rely on 'which')
+        const checkApt = await sbx.runCommand({ cmd: "sh", args: ["-c", "command -v apt-get"] });
+        const hasApt = checkApt.exitCode === 0;
+
+        if (hasApt) {
+            console.log("[Judge Sandbox] Ubuntu/Debian detected (apt-get found). Updating package lists...");
             const updateRes = await sbx.runCommand({
-                cmd: "sh",
-                args: ["-c", "apt-get update -y"],
+                cmd: "apt-get",
+                args: ["update", "-y"],
                 sudo: true,
-                timeoutMs: 60000
+                timeoutMs: 90000
             });
-            if (updateRes.exitCode !== 0) {
-                console.warn("[Judge Sandbox] apt-get update warning:", await updateRes.stderr());
-            }
+            console.log(`[Judge Sandbox] apt-get update finished with exitCode: ${updateRes.exitCode}`);
 
-            const installRes = await sbx.runCommand({
-                cmd: "sh",
-                args: ["-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y gcc g++ default-jdk-headless || DEBIAN_FRONTEND=noninteractive apt-get install -y gcc g++ default-jdk"],
+            console.log("[Judge Sandbox] Installing gcc, g++, and default-jdk-headless via apt-get...");
+            let installRes = await sbx.runCommand({
+                cmd: "apt-get",
+                args: ["install", "-y", "--no-install-recommends", "gcc", "g++", "default-jdk-headless"],
                 sudo: true,
                 timeoutMs: 180000
             });
 
             if (installRes.exitCode !== 0) {
-                console.error("[Judge Sandbox] apt-get install error:", await installRes.stderr());
-            } else {
-                console.log("[Judge Sandbox] Compilers installed successfully via apt-get.");
+                console.warn("[Judge Sandbox] default-jdk-headless failed, attempting full default-jdk package...");
+                installRes = await sbx.runCommand({
+                    cmd: "apt-get",
+                    args: ["install", "-y", "gcc", "g++", "default-jdk"],
+                    sudo: true,
+                    timeoutMs: 180000
+                });
+            }
+
+            console.log(`[Judge Sandbox] apt-get install completed with exitCode: ${installRes.exitCode}`);
+            if (installRes.exitCode !== 0) {
+                console.error("[Judge Sandbox] apt-get install stderr:", await installRes.stderr());
             }
         } else {
-            console.log("[Judge Sandbox] Detected RHEL/Amazon Linux. Installing via dnf...");
+            console.log("[Judge Sandbox] Non-Debian system. Attempting dnf install (Amazon Linux / Fedora)...");
             const installRes = await sbx.runCommand({
                 cmd: "dnf",
                 args: ["install", "-y", "gcc", "gcc-c++", "java-17-amazon-corretto-devel"],
                 sudo: true,
                 timeoutMs: 180000
             });
+            console.log(`[Judge Sandbox] dnf install finished with exitCode: ${installRes.exitCode}`);
             if (installRes.exitCode !== 0) {
-                console.error("[Judge Sandbox] dnf install error:", await installRes.stderr());
-            } else {
-                console.log("[Judge Sandbox] Compilers installed successfully via dnf.");
+                console.error("[Judge Sandbox] dnf install stderr:", await installRes.stderr());
             }
         }
 
-        const verify = await sbx.runCommand({ cmd: "sh", args: ["-c", "which g++ && which javac"] });
-        if (verify.exitCode === 0) {
-            console.log("[Judge Sandbox] Verified compilers in sandbox: g++ and javac are ready.");
-        } else {
-            console.warn("[Judge Sandbox] Compiler verification check warning:", await verify.stderr());
-        }
+        // Verify installations directly
+        const javacTest = await sbx.runCommand({ cmd: "sh", args: ["-c", "javac -version || /usr/bin/javac -version"] });
+        const gppTest = await sbx.runCommand({ cmd: "sh", args: ["-c", "g++ --version || /usr/bin/g++ --version"] });
+
+        const javacOut = ((await javacTest.stdout()) + " " + (await javacTest.stderr())).trim();
+        const gppOut = ((await gppTest.stdout()) + " " + (await gppTest.stderr())).trim();
+
+        console.log(`[Judge Sandbox Verification] javac status: (exitCode: ${javacTest.exitCode}) -> ${javacOut}`);
+        console.log(`[Judge Sandbox Verification] g++ status:   (exitCode: ${gppTest.exitCode}) -> ${gppOut.slice(0, 100)}`);
+        console.log("[Judge Sandbox] === Compiler installation sequence finished ===");
     } catch (installErr) {
         console.error("[Judge Sandbox] Unexpected error during compiler installation:", installErr);
     }
 };
 
 /**
- * Gets an active sandbox from the local pool or resumes/creates coderush-engine-v2
+ * Gets an active sandbox from the local pool or resumes/creates coderush-engine-v3
  * using Sandbox.getOrCreate so compilers are saved in the snapshot.
  */
 export const getOrInitSandbox = async () => {
@@ -140,7 +162,7 @@ export const getOrInitSandbox = async () => {
             name: SANDBOX_NAME,
             ...credentials,
             onCreate: async (sbx) => {
-                console.log("[Judge Sandbox] First-time setup: Installing compilers for snapshot...");
+                console.log("[Judge Sandbox] First-time setup: Installing compilers into snapshot...");
                 await installCompilers(sbx);
             }
         });
@@ -160,10 +182,12 @@ export const getOrInitSandbox = async () => {
 
     // Verify compilers are ready in the running sandbox instance
     try {
-        const check = await sandbox.runCommand({ cmd: "sh", args: ["-c", "which g++ && which javac"] });
+        const check = await sandbox.runCommand({ cmd: "sh", args: ["-c", "command -v g++ && command -v javac"] });
         if (check.exitCode !== 0) {
-            console.log("[Judge Sandbox] Compilers missing in active sandbox. Installing now...");
+            console.log("[Judge Sandbox] Compilers not ready in active sandbox. Installing now...");
             await installCompilers(sandbox);
+        } else {
+            console.log("[Judge Sandbox] Compilers (g++, javac) verified and ready in active sandbox.");
         }
     } catch (checkErr) {
         console.error("[Judge Sandbox] Compiler verification check failed:", checkErr);
@@ -244,30 +268,60 @@ export const sendToJudge = async (questionId, userCode, languageId, langSlug, te
             let execCmdStr = "";
 
             if (langSlug === 'c') {
+                const checkGcc = await sandbox.runCommand({ cmd: "sh", args: ["-c", "command -v gcc"] });
+                if (checkGcc.exitCode !== 0) {
+                    console.warn("[Judge Sandbox] 'gcc' missing at compile time! Running emergency install...");
+                    await installCompilers(sandbox);
+                }
                 const compile = await sandbox.runCommand({ 
                     cmd: "sh", 
                     args: ["-c", `cd ${workDir} && gcc ${fileName} -o main`],
                     timeoutMs: 15000 
                 });
-                if (compile.exitCode !== 0) return formatResponse("Compilation Error", "", await compile.stderr(), "");
+                if (compile.exitCode !== 0) {
+                    const err = await compile.stderr();
+                    console.error("[Judge Sandbox] C compilation failed:", err);
+                    return formatResponse("Compilation Error", "", err, "");
+                }
                 execCmdStr = `cd ${workDir} && ./main < input.txt`;
             }
             else if (langSlug === 'cpp') {
+                const checkGpp = await sandbox.runCommand({ cmd: "sh", args: ["-c", "command -v g++"] });
+                if (checkGpp.exitCode !== 0) {
+                    console.warn("[Judge Sandbox] 'g++' missing at compile time! Running emergency install...");
+                    await installCompilers(sandbox);
+                }
                 const compile = await sandbox.runCommand({ 
                     cmd: "sh", 
                     args: ["-c", `cd ${workDir} && g++ ${fileName} -o main`],
                     timeoutMs: 15000 
                 });
-                if (compile.exitCode !== 0) return formatResponse("Compilation Error", "", await compile.stderr(), "");
+                if (compile.exitCode !== 0) {
+                    const err = await compile.stderr();
+                    console.error("[Judge Sandbox] C++ compilation failed:", err);
+                    return formatResponse("Compilation Error", "", err, "");
+                }
                 execCmdStr = `cd ${workDir} && ./main < input.txt`;
             }
             else if (langSlug === 'java') {
+                console.log(`[Judge Sandbox] Compiling Java (${fileName}) in ${workDir}...`);
+                const checkJavac = await sandbox.runCommand({ cmd: "sh", args: ["-c", "command -v javac"] });
+                if (checkJavac.exitCode !== 0) {
+                    console.warn("[Judge Sandbox] 'javac' missing at compile time! Running emergency install...");
+                    await installCompilers(sandbox);
+                }
+
                 const compile = await sandbox.runCommand({ 
                     cmd: "sh", 
                     args: ["-c", `cd ${workDir} && javac ${fileName}`],
-                    timeoutMs: 15000 
+                    timeoutMs: 20000 
                 });
-                if (compile.exitCode !== 0) return formatResponse("Compilation Error", "", await compile.stderr(), "");
+                if (compile.exitCode !== 0) {
+                    const err = await compile.stderr();
+                    console.error("[Judge Sandbox] Java compilation failed:", err);
+                    return formatResponse("Compilation Error", "", err, "");
+                }
+                console.log("[Judge Sandbox] Java compiled successfully.");
                 execCmdStr = `cd ${workDir} && java Main < input.txt`;
             }
             else if (langSlug === 'javascript') {

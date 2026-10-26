@@ -10,12 +10,15 @@ import { Game } from "../models/game.model.js";
 export const executeCode = asyncHandler(async (req, res) => {
     const { questionId, sourceCode, languageId, langSlug, testCases, sessionId } = req.body;
 
+    console.log(`[Judge Controller] /run request received for lang: ${langSlug}, questionId: ${questionId}`);
+
     if (!questionId || !sourceCode || !languageId || !langSlug || !testCases) {
         throw new ApiError(400, "Missing required execution parameters.");
     }
 
     // Call the service; pass optional sessionId (e.g., gameId) to allow sandbox reuse
     const result = await sendToJudge(questionId, sourceCode, languageId, langSlug, testCases, sessionId);
+    console.log(`[Judge Controller] /run result: ${result.status}, stderr: "${(result.stderr || '').slice(0, 100)}"`);
 
     // Judge0 returns a token, or the direct result if wait=true
     return res.status(200).json(
@@ -26,6 +29,8 @@ export const executeCode = asyncHandler(async (req, res) => {
 export const submitCode = asyncHandler(async (req, res) => {
     const { questionId, sourceCode, languageId, langSlug, sessionId, wrongSubmissions = 0, userComplexity = 'O(n^2)' } = req.body;
 
+    console.log(`[Judge Controller] /submit request received for lang: ${langSlug}, questionId: ${questionId}`);
+
     if (!questionId || !sourceCode || !languageId || !langSlug) {
         throw new ApiError(400, "Missing required submission parameters.");
     }
@@ -35,6 +40,7 @@ export const submitCode = asyncHandler(async (req, res) => {
 
     // Evaluate against ALL hidden testcases
     const result = await sendToJudge(questionId, sourceCode, languageId, langSlug, null, sessionId, true);
+    console.log(`[Judge Controller] /submit result: ${result.status}, stderr: "${(result.stderr || '').slice(0, 100)}"`);
     
     // Evaluate ELO if it's a real user session
     let eloData = null;
